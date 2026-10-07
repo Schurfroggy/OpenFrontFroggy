@@ -54,10 +54,10 @@ async function flush(el: TestSidebar): Promise<void> {
 }
 
 function fullscreenButton(el: TestSidebar): HTMLImageElement | undefined {
-  const images = [
-    ...el.renderRoot.querySelectorAll<HTMLImageElement>("img"),
-  ].filter((img) => img.alt !== "settings" && img.alt !== "exit");
-  return images[0];
+  return (
+    el.renderRoot.querySelector<HTMLImageElement>("[data-fullscreen-button]") ??
+    undefined
+  );
 }
 
 function clickFullscreen(el: TestSidebar): void {

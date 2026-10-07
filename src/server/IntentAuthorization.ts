@@ -23,6 +23,7 @@ export interface IntentGameState {
   isListed: boolean;
   isQueued: boolean;
   hasStarted: boolean;
+  allowPlayerTeamSelection: boolean;
 }
 
 // The actor and game-state guards of GameServer.handleIntent, in the order
@@ -106,6 +107,43 @@ export function authorizeIntent(
           status: 409,
           error: "cannot enable a join whitelist in a publicly listed lobby",
         };
+      }
+      return null;
+
+    case "set_player_team":
+      if (game.isPublic) {
+        return { status: 403, error: "cannot select teams in a public game" };
+      }
+      if (game.isListed) {
+        return { status: 409, error: "listed lobby settings are locked" };
+      }
+      if (game.hasStarted) {
+        return { status: 409, error: "game already started" };
+      }
+      if (actor.isLobbyCreator) return null;
+      if (!game.allowPlayerTeamSelection) {
+        return { status: 403, error: "player team selection is disabled" };
+      }
+      if (intent.targetClientID !== actor.clientID) {
+        return { status: 403, error: "players may only move themselves" };
+      }
+      return null;
+
+    case "apply_team_preset":
+      if (!actor.isLobbyCreator && !actor.isAdminBot) {
+        return {
+          status: 403,
+          error: "only the lobby creator can assign teams",
+        };
+      }
+      if (game.isPublic) {
+        return { status: 403, error: "cannot assign teams in a public game" };
+      }
+      if (game.isListed) {
+        return { status: 409, error: "listed lobby settings are locked" };
+      }
+      if (game.hasStarted) {
+        return { status: 409, error: "game already started" };
       }
       return null;
 

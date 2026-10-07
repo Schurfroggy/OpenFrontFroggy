@@ -23,7 +23,7 @@ export async function verifyClientToken(
   token: string,
 ): Promise<TokenVerificationResult> {
   if (PersistentIdSchema.safeParse(token).success) {
-    if (ServerEnv.env() === GameEnv.Dev) {
+    if (ServerEnv.env() === GameEnv.Dev || ServerEnv.selfHosted()) {
       return { type: "success", persistentId: token, claims: null };
     } else {
       return {

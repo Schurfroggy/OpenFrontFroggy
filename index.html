@@ -6,7 +6,7 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
-    <title data-i18n="main.title">OpenFront (ALPHA)</title>
+    <title data-i18n="main.title">OpenFrontFroggy</title>
     <link rel="manifest" href="<%- manifestHref %>" />
     <link rel="icon" type="image/svg+xml" href="<%- faviconHref %>" />
 
@@ -172,7 +172,8 @@
         gitCommit: <%- gitCommit %>,
         assetManifest: <%- assetManifest %>,
         cdnBase: <%- cdnBase %>,
-        gameEnv: <%- gameEnv %>,<%- typeof cluster !== "undefined" && cluster ? "\n        cluster: " + cluster + "," : "" %><%- typeof instanceLetter !== "undefined" && instanceLetter ? "\n        instanceLetter: " + instanceLetter + "," : "" %>
+        gameEnv: <%- gameEnv %>,
+        selfHosted: <%- typeof selfHosted !== "undefined" ? selfHosted : "false" %>,<%- typeof cluster !== "undefined" && cluster ? "\n        cluster: " + cluster + "," : "" %><%- typeof instanceLetter !== "undefined" && instanceLetter ? "\n        instanceLetter: " + instanceLetter + "," : "" %>
         turnstileSiteKey: <%- turnstileSiteKey %>,
         jwtAudience: <%- jwtAudience %>,<%- typeof stripePublishableKey !== "undefined" && stripePublishableKey ? "\n        stripePublishableKey: " + stripePublishableKey + "," : "" %><%- typeof faroCollectorUrl !== "undefined" && faroCollectorUrl ? "\n        faroCollectorUrl: " + faroCollectorUrl + "," : "" %><%- typeof instanceId !== "undefined" && instanceId ? "\n        instanceId: " + instanceId + "," : "" %><%- typeof serverHost !== "undefined" && serverHost ? "\n        serverHost: " + serverHost + "," : "" %><%- typeof siteHost !== "undefined" && siteHost ? "\n        siteHost: " + siteHost + "," : "" %>
       };
@@ -200,6 +201,8 @@
       );
     </script>
 
+    <% if (typeof selfHosted === "undefined" || (selfHosted !== "true" &&
+    selfHosted !== true)) { %>
     <!-- CrazyGames SDK -->
     <script
       src="https://sdk.crazygames.com/crazygames-sdk-v3.js"
@@ -255,6 +258,7 @@
 
       gtag("config", "G-WQGQQ8RDN4");
     </script>
+    <% } %>
   </head>
 
   <body
@@ -312,14 +316,30 @@
         class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-99999"
       ></div>
 
+      <% if (typeof selfHosted === "undefined" || (selfHosted !== "true" &&
+      selfHosted !== true)) { %>
       <homepage-promos></homepage-promos>
+      <% } %>
       <banned-modal></banned-modal>
+      <% if (typeof selfHosted === "undefined" || (selfHosted !== "true" &&
+      selfHosted !== true)) { %>
       <marketing-consent-toast></marketing-consent-toast>
       <purchase-nudge-modal></purchase-nudge-modal>
+      <% } %>
 
       <!-- Main container with responsive padding -->
       <main-layout class="contents">
         <play-page class="contents"></play-page>
+        <self-hosted-account-modal
+          id="page-self-hosted-account"
+          inline
+          class="hidden w-full h-full page-content relative z-50"
+        ></self-hosted-account-modal>
+        <self-hosted-admin-modal
+          id="page-self-hosted-admin"
+          inline
+          class="hidden w-full h-full page-content relative z-50"
+        ></self-hosted-admin-modal>
         <matchmaking-modal
           id="page-matchmaking"
           inline
@@ -506,7 +526,10 @@
          home container) so the Twitch iframe is never display:none'd during a game,
          which would unmount the player and break ToS-compliant playback. The
          component is position:fixed and self-manages visibility (pauses in-game). -->
+    <% if (typeof selfHosted === "undefined" || (selfHosted !== "true" &&
+    selfHosted !== true)) { %>
     <featured-stream></featured-stream>
+    <% } %>
 
     <!-- Steam shell status bar. A direct <body> child, like
          featured-stream above, so it is not inside the home container -- but
@@ -591,13 +614,14 @@
       });
     </script>
 
+    <% if (typeof selfHosted === "undefined" || (selfHosted !== "true" &&
+    selfHosted !== true)) { %>
     <!-- Analytics -->
     <script
       defer
       src="https://static.cloudflareinsights.com/beacon.min.js"
       data-cf-beacon='{"token": "03d93e6fefb349c28ee69b408fa25a13"}'
     ></script>
-    <script type="module" src="/src/client/Main.ts"></script>
     <footer>
       <script
         data-cfasync="false"
@@ -605,5 +629,11 @@
         src="//cdn.intergient.com/1025558/75940/ramp.js"
       ></script>
     </footer>
+    <% } %>
+
+    <!-- The game client must load in every deployment mode. Only the
+         third-party analytics and ad scripts above are disabled when the
+         server is self-hosted. -->
+    <script type="module" src="/src/client/Main.ts"></script>
   </body>
 </html>

@@ -132,7 +132,7 @@ export class MultiTabModal extends LitElement implements Controller {
             <div
               class="px-2 py-1 bg-red-600 text-white text-xs font-bold rounded-full animate-pulse"
             >
-              RECORDING
+              ${translateText("multi_tab.recording")}
             </div>
           </div>
 
@@ -144,21 +144,27 @@ export class MultiTabModal extends LitElement implements Controller {
             class="mb-4 p-3 bg-gray-100 dark:bg-gray-900 rounded-md text-sm font-mono"
           >
             <div class="flex justify-between mb-1">
-              <span class="text-gray-500 dark:text-gray-400">IP:</span>
+              <span class="text-gray-500 dark:text-gray-400"
+                >${translateText("multi_tab.ip")}:</span
+              >
               <span class="text-red-600 dark:text-red-400">${this.fakeIp}</span>
             </div>
             <div class="flex justify-between mb-1">
               <span class="text-gray-500 dark:text-gray-400"
-                >Device Fingerprint:</span
+                >${translateText("multi_tab.device_fingerprint")}:</span
               >
               <span class="text-red-600 dark:text-red-400"
                 >${this.deviceFingerprint}</span
               >
             </div>
             <div class="flex justify-between">
-              <span class="text-gray-500 dark:text-gray-400">Reported:</span>
+              <span class="text-gray-500 dark:text-gray-400"
+                >${translateText("multi_tab.reported")}:</span
+              >
               <span class="text-red-600 dark:text-red-400"
-                >${this.reported ? "TRUE" : "FALSE"}</span
+                >${this.reported
+                  ? translateText("multi_tab.true")
+                  : translateText("multi_tab.false")}</span
               >
             </div>
           </div>
@@ -184,7 +190,7 @@ export class MultiTabModal extends LitElement implements Controller {
           </p>
 
           <p class="mt-3 text-xs text-red-500 font-semibold">
-            Repeated violations may result in permanent account suspension.
+            ${translateText("multi_tab.repeated_violation")}
           </p>
         </div>
       </div>

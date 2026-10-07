@@ -1,16 +1,16 @@
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="proprietary/images/OpenFrontLogoDark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="proprietary/images/OpenFrontLogo.svg">
-    <img src="proprietary/images/OpenFrontLogo.svg" alt="OpenFrontIO Logo" width="300">
-  </picture>
-</p>
+# OpenFrontFroggy
+
+> An unofficial community modification of [OpenFront](https://github.com/openfrontio/OpenFrontIO), maintained by Schurfroggy. This project is not the official OpenFront distribution and is not endorsed by the OpenFront team.
+
+[简体中文](README.zh-CN.md)
+
+This version focuses on a small self-hosted friends server, Simplified Chinese localization, local accounts, achievements, and custom lobby controls. See [MODIFICATIONS.md](MODIFICATIONS.md) for the main differences and upstream baseline.
 
 [OpenFront.io](https://openfront.io/) is an online real-time strategy game focused on territorial control and alliance building. Players compete to expand their territory, build structures, and form strategic alliances in various maps based on real-world geography.
 
 This is a fork/rewrite of WarFront.io. Credit to https://github.com/WarFrontIO.
 
-![CI](https://github.com/openfrontio/OpenFrontIO/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/Schurfroggy/OpenFrontFroggy/actions/workflows/ci.yml/badge.svg)
 [![Crowdin](https://badges.crowdin.net/openfront-mls/localized.svg)](https://crowdin.com/project/openfront-mls)
 [![CLA assistant](https://cla-assistant.io/readme/badge/openfrontio/OpenFrontIO)](https://cla-assistant.io/openfrontio/OpenFrontIO)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
@@ -57,8 +57,8 @@ npm install --global --ignore-scripts npm@12.1.0
 1. **Clone the repository**
 
    ```bash
-   git clone https://github.com/openfrontio/OpenFrontIO.git
-   cd OpenFrontIO
+   git clone https://github.com/Schurfroggy/OpenFrontFroggy.git
+   cd OpenFrontFroggy
    ```
 
 2. **Install dependencies**

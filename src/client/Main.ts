@@ -99,6 +99,8 @@ import {
   withGroupToken,
 } from "./PresenceGroup";
 import { RewardsModal } from "./RewardsModal";
+import "./SelfHostedAccountModal";
+import "./SelfHostedAdminModal";
 import {
   ensureServerList,
   redirectToGameVersion,
@@ -391,7 +393,9 @@ class Client {
       lapseMarker = localStorage.getItem(LAPSE_NOTICE_KEY);
     };
 
-    crazyGamesSDK.maybeInit();
+    if (ClientEnv.selfHosted?.() !== true) {
+      crazyGamesSDK.maybeInit();
+    }
 
     // Every exit from a game (win screen, in-game quit, popstate) navigates to
     // "/" and re-runs this, so announcing the menu here also covers "returned
@@ -401,37 +405,52 @@ class Client {
     // Register modals with the URL router. Lobby modals (join/host) and
     // matchmaking are intentionally omitted — they own their own URL state
     // (path-based) or none at all.
-    modalRouter.register("store", {
-      tag: "store-modal",
-      pageId: "page-item-store",
-    });
+    if (ClientEnv.selfHosted?.() !== true) {
+      modalRouter.register("store", {
+        tag: "store-modal",
+        pageId: "page-item-store",
+      });
+      modalRouter.register("leaderboard", {
+        tag: "leaderboard-modal",
+        pageId: "page-leaderboard",
+      });
+      modalRouter.register("clan", { tag: "clan-modal", pageId: "page-clan" });
+      modalRouter.register("account", {
+        tag: "account-modal",
+        pageId: "page-account",
+      });
+      modalRouter.register("account-settings", {
+        tag: "account-settings-modal",
+      });
+      modalRouter.register("change-username", { tag: "change-username-modal" });
+      modalRouter.register("subscription", { tag: "subscription-modal" });
+      modalRouter.register("profile", {
+        tag: "player-profile-modal",
+        pageId: "page-profile",
+      });
+      modalRouter.register("news", { tag: "news-modal", pageId: "page-news" });
+      modalRouter.register("ranked", {
+        tag: "ranked-modal",
+        pageId: "page-ranked",
+      });
+      modalRouter.register("detailed-view", {
+        tag: "detailed-view-modal",
+        pageId: "page-detailed-view",
+      });
+      modalRouter.register("inventory", {
+        tag: "inventory-modal",
+        pageId: "page-inventory",
+      });
+    }
     modalRouter.register("settings", {
       tag: "user-setting",
       pageId: "page-settings",
     });
-    modalRouter.register("leaderboard", {
-      tag: "leaderboard-modal",
-      pageId: "page-leaderboard",
-    });
-    modalRouter.register("clan", { tag: "clan-modal", pageId: "page-clan" });
-    modalRouter.register("account", {
-      tag: "account-modal",
-      pageId: "page-account",
-    });
-    // Profile-menu modals: popup style, so no pageId.
-    modalRouter.register("account-settings", { tag: "account-settings-modal" });
-    modalRouter.register("change-username", { tag: "change-username-modal" });
-    modalRouter.register("subscription", { tag: "subscription-modal" });
     modalRouter.register("stats", {
       tag: "game-stats-modal",
       pageId: "page-stats",
     });
-    modalRouter.register("profile", {
-      tag: "player-profile-modal",
-      pageId: "page-profile",
-    });
     modalRouter.register("help", { tag: "help-modal", pageId: "page-help" });
-    modalRouter.register("news", { tag: "news-modal", pageId: "page-news" });
     modalRouter.register("language", {
       tag: "language-modal",
       pageId: "page-language",
@@ -440,21 +459,9 @@ class Client {
       tag: "single-player-modal",
       pageId: "page-single-player",
     });
-    modalRouter.register("ranked", {
-      tag: "ranked-modal",
-      pageId: "page-ranked",
-    });
-    modalRouter.register("detailed-view", {
-      tag: "detailed-view-modal",
-      pageId: "page-detailed-view",
-    });
     modalRouter.register("troubleshooting", {
       tag: "troubleshooting-modal",
       pageId: "page-troubleshooting",
-    });
-    modalRouter.register("inventory", {
-      tag: "inventory-modal",
-      pageId: "page-inventory",
     });
 
     // Kick the server-list fetch off here, before anything below awaits the
@@ -472,7 +479,9 @@ class Client {
     // so rendering the widget there just fails — and replays never
     // send a token anyway (see getTurnstileToken below).
     const turnstilePrefetch =
-      isDesktopShell() || isReplayShellHost(window.location.hostname)
+      ClientEnv.selfHosted?.() === true ||
+      isDesktopShell() ||
+      isReplayShellHost(window.location.hostname)
         ? null
         : getTurnstileToken();
     // A prefetch that fails is not an error anyone has asked about yet: the
@@ -637,10 +646,16 @@ class Client {
       console.warn("Store modal element not found");
     }
 
-    this.storeModal.refresh();
+    if (ClientEnv.selfHosted?.() !== true) {
+      this.storeModal.refresh();
+    }
 
     window.addEventListener("showPage", (e: any) => {
-      if (typeof e?.detail === "string" && e.detail === "page-play") {
+      if (
+        ClientEnv.selfHosted?.() !== true &&
+        typeof e?.detail === "string" &&
+        e.detail === "page-play"
+      ) {
         setTimeout(() => {
           this.storeModal.refresh();
         }, 50);
@@ -693,7 +708,10 @@ class Client {
       const isAdFree =
         userMeResponse !== false && userMeResponse.player?.adfree === true;
       window.adsEnabled =
-        !isAdFree && !crazyGamesSDK.isOnCrazyGames() && !isDesktopShell();
+        ClientEnv.selfHosted?.() !== true &&
+        !isAdFree &&
+        !crazyGamesSDK.isOnCrazyGames() &&
+        !isDesktopShell();
       // Ad-eligible users only: paid/adfree users must never load Admiral (its
       // adblock popup fires autonomously once the payload runs). Start watching
       // adblock state; once a blocker is ever detected the in-game ad is
@@ -906,16 +924,18 @@ class Client {
 
     // Re-run auth when the player signs into CrazyGames mid-session. Logout
     // reloads the page, so only login needs handling here.
-    crazyGamesSDK.addAuthListener(() => {
-      invalidateUserMe();
-      snapshotLapseMarker();
-      const generation = authGeneration;
-      reauthAfterCrazyGamesChange().then((result) =>
-        result === false
-          ? applyUserMe(generation)(false)
-          : getUserMe().then(applyUserMe(generation)),
-      );
-    });
+    if (ClientEnv.selfHosted?.() !== true) {
+      crazyGamesSDK.addAuthListener(() => {
+        invalidateUserMe();
+        snapshotLapseMarker();
+        const generation = authGeneration;
+        reauthAfterCrazyGamesChange().then((result) =>
+          result === false
+            ? applyUserMe(generation)(false)
+            : getUserMe().then(applyUserMe(generation)),
+        );
+      });
+    }
 
     // Subscribe to the bridge directly rather than to the status bar's
     // re-broadcast. The bar subscribes when its element upgrades and the
@@ -937,6 +957,11 @@ class Client {
       console.warn("Host private lobby modal element not found");
     } else {
       this.hostModal.eventBus = this.eventBus;
+      // Account ids in self-hosted mode come from the name. Snapshot this
+      // document's displayed name instead of re-reading shared localStorage;
+      // sibling tabs are allowed to represent different local players.
+      this.hostModal.getPlayerName = () =>
+        this.usernameInput?.getUsername() ?? fallbackPlayerName().name;
     }
 
     this.joinModal = document.querySelector(

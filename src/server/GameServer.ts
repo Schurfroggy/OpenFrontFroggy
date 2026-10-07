@@ -8,12 +8,15 @@ import { isAdminRole } from "../core/ApiSchemas";
 import { CloseCode, CloseReason } from "../core/CloseCodes";
 import { GameEnv } from "../core/configuration/Config";
 import {
+  Duos,
   GameMode,
   GameType,
   HumansVsNations,
   PlayerInfo,
   PlayerType,
+  Quads,
   RankedType,
+  Trios,
 } from "../core/game/Game";
 import { maps } from "../core/game/Maps.gen";
 import {
@@ -48,6 +51,7 @@ import {
   ServerStartGameMessage,
   ServerTurnMessage,
   StampedIntent,
+  TeamAssignmentPreset,
   TeamCountConfig,
   Tribe,
   Turn,
@@ -283,6 +287,9 @@ export class GameServer {
   // Matchmade team split from the matchmaking assignment: publicIds per
   // team. At start each client is stamped with its team's index.
   private matchmakingTeams?: string[][];
+  // Private-lobby team choices. These pins are included in lobby_info and
+  // copied unchanged into GameStartInfo, so the preview is the actual match.
+  private readonly lobbyTeamAssignments = new Map<ClientID, number>();
   private readonly deps: GameServerDeps;
   // Who may see whose real identity (anonymizeNames / pinned teams / admin
   // clan-tag reveal); shapes the per-viewer lobby roster and start message.
@@ -307,7 +314,7 @@ export class GameServer {
       gameID: opts.id,
       config: () => this.gameConfig,
       clients: () => this.clients.all(),
-      teamIndex: (c) => this.matchmakingTeamIndex(c),
+      teamIndex: (c) => this.teamIndexForClient(c),
     });
     this.log = opts.log.child({ gameID: opts.id });
     this.ingress = new SocketIngress(this.log, this.telemetry, {
@@ -344,7 +351,17 @@ export class GameServer {
   }
 
   public updateGameConfig(gameConfig: Partial<GameConfig>): void {
+    const oldMode = this.gameConfig.gameMode;
+    const oldTeams = this.gameConfig.playerTeams;
+    const oldNations = this.gameConfig.nations;
     applyGameConfigPatch(this.gameConfig, gameConfig);
+    if (
+      oldMode !== this.gameConfig.gameMode ||
+      oldTeams !== this.gameConfig.playerTeams ||
+      oldNations !== this.gameConfig.nations
+    ) {
+      this.lobbyTeamAssignments.clear();
+    }
   }
 
   // Dispatch a control/gameplay intent from either a websocket client or the
@@ -382,6 +399,8 @@ export class GameServer {
       isListed: this.isListed(),
       isQueued: this.listing.isQueued(),
       hasStarted: this.hasStarted(),
+      allowPlayerTeamSelection:
+        this.gameConfig.allowPlayerTeamSelection === true,
     });
     if (denied !== null) {
       return finish(denied);
@@ -423,8 +442,20 @@ export class GameServer {
 
       case "update_game_config": {
         this.updateGameConfig(stamped.config);
+        this.broadcastLobbyInfo();
         return finish({ status: 200 });
       }
+
+      case "set_player_team":
+        return finish(
+          this.setLobbyTeamAssignment(
+            stamped.targetClientID,
+            stamped.teamIndex,
+          ),
+        );
+
+      case "apply_team_preset":
+        return finish(this.applyLobbyTeamPreset(stamped.preset));
 
       case "toggle_game_start_timer": {
         if (this.startsAt) {
@@ -1109,7 +1140,7 @@ export class GameServer {
         cosmetics: c.cosmetics,
         isLobbyCreator: this.lobbyCreatorID === c.clientID,
         friends: friendsFor(c),
-        teamIndex: this.matchmakingTeamIndex(c),
+        teamIndex: this.teamIndexForClient(c),
       })),
       tribes: this.tribes,
     });
@@ -1216,7 +1247,7 @@ export class GameServer {
   ): Client[] {
     const playingClients = this.clients
       .players()
-      .filter((c) => this.matchmakingTeamIndex(c) === undefined);
+      .filter((c) => this.teamIndexForClient(c) === undefined);
     const totalPlayers = playingClients.length + nationCount;
     let teams;
     try {
@@ -1330,6 +1361,7 @@ export class GameServer {
       if (max !== undefined && this.playerCount() >= max) return;
     }
     client.spectator = spectator;
+    if (spectator) this.lobbyTeamAssignments.delete(client.clientID);
     // The lobby list is derived from this flag, so everyone's view of who is
     // playing has to be refreshed rather than waiting out the next tick.
     this.broadcastLobbyInfo();
@@ -1384,6 +1416,111 @@ export class GameServer {
       team.includes(publicId),
     );
     return idx === -1 ? undefined : idx;
+  }
+
+  private teamIndexForClient(c: Client): number | undefined {
+    return (
+      this.matchmakingTeamIndex(c) ?? this.lobbyTeamAssignments.get(c.clientID)
+    );
+  }
+
+  private lobbyTeams(): TeamCountConfig | null {
+    if (
+      this.gameConfig.gameMode !== GameMode.Team ||
+      this.gameConfig.playerTeams === undefined ||
+      this.gameConfig.playerTeams === HumansVsNations
+    ) {
+      return null;
+    }
+    return this.gameConfig.playerTeams;
+  }
+
+  private resolvedLobbyTeamCount(playerTeams: TeamCountConfig): number | null {
+    try {
+      return resolveTeamsList(
+        playerTeams,
+        this.clients.players().length + this.resolveDefaultNationCount(),
+      ).length;
+    } catch {
+      return null;
+    }
+  }
+
+  private fixedTeamCapacity(playerTeams: TeamCountConfig): number | null {
+    if (playerTeams === Duos) return 2;
+    if (playerTeams === Trios) return 3;
+    if (playerTeams === Quads) return 4;
+    return null;
+  }
+
+  private setLobbyTeamAssignment(
+    targetClientID: ClientID,
+    teamIndex: number | null,
+  ): IntentOutcome {
+    const playerTeams = this.lobbyTeams();
+    if (playerTeams === null) {
+      return { status: 409, error: "manual team assignment is unavailable" };
+    }
+    const target = this.clients
+      .players()
+      .find((client) => client.clientID === targetClientID);
+    if (target === undefined) {
+      return { status: 404, error: "player is not active in this lobby" };
+    }
+    if (teamIndex === null) {
+      this.lobbyTeamAssignments.delete(targetClientID);
+      this.broadcastLobbyInfo();
+      return { status: 200 };
+    }
+    const teamCount = this.resolvedLobbyTeamCount(playerTeams);
+    if (teamCount === null || teamIndex >= teamCount) {
+      return { status: 400, error: "team index out of range" };
+    }
+    const capacity = this.fixedTeamCapacity(playerTeams);
+    if (capacity !== null) {
+      const assignedToTeam = this.clients
+        .players()
+        .filter(
+          (client) =>
+            client.clientID !== targetClientID &&
+            this.teamIndexForClient(client) === teamIndex,
+        ).length;
+      if (assignedToTeam >= capacity) {
+        return { status: 409, error: "team is full" };
+      }
+    }
+    this.lobbyTeamAssignments.set(targetClientID, teamIndex);
+    this.broadcastLobbyInfo();
+    return { status: 200 };
+  }
+
+  private applyLobbyTeamPreset(preset: TeamAssignmentPreset): IntentOutcome {
+    const playerTeams = this.lobbyTeams();
+    if (playerTeams === null) {
+      return { status: 409, error: "team presets are unavailable" };
+    }
+    const teamCount = this.resolvedLobbyTeamCount(playerTeams);
+    if (teamCount === null) {
+      return { status: 400, error: "invalid team configuration" };
+    }
+    const players = this.clients.players();
+    this.lobbyTeamAssignments.clear();
+    if (preset === "balanced") {
+      players.forEach((client, index) => {
+        this.lobbyTeamAssignments.set(client.clientID, index % teamCount);
+      });
+    } else {
+      const capacity = this.fixedTeamCapacity(playerTeams);
+      players.forEach((client, index) => {
+        const teamIndex = capacity === null ? 0 : Math.floor(index / capacity);
+        this.lobbyTeamAssignments.set(
+          client.clientID,
+          Math.min(teamIndex, teamCount - 1),
+        );
+      });
+    }
+    this.broadcastLobbyInfo();
+    return { status: 200 };
   }
 
   private addIntent(intent: StampedIntent) {

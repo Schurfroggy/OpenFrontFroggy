@@ -66,9 +66,8 @@ describe("createRenderer", () => {
     vi.restoreAllMocks();
   });
 
-  it("wires the HUD components and returns a renderer", () => {
-    const eventBus = new EventBus();
-    const game = {
+  function gameView(): GameView {
+    return {
       layers: () => [],
       width: () => 100,
       height: () => 100,
@@ -82,6 +81,11 @@ describe("createRenderer", () => {
         isReplay: () => false,
       }),
     } as unknown as GameView;
+  }
+
+  it("wires the HUD components and returns a renderer", () => {
+    const eventBus = new EventBus();
+    const game = gameView();
     const view = {} as MapRenderer;
     const inputEl = document.createElement("div");
 
@@ -100,5 +104,19 @@ describe("createRenderer", () => {
     expect(emojiTable.game).toBe(game);
     eventBus.emit(new ShowEmojiMenuEvent(1, 1));
     expect(emojiTable.isVisible).toBe(true);
+  });
+
+  it("starts without the optional in-game promotion element", () => {
+    elements.delete("in-game-promo");
+
+    expect(() =>
+      createRenderer(
+        document.createElement("div"),
+        gameView(),
+        new EventBus(),
+        null,
+        {} as MapRenderer,
+      ),
+    ).not.toThrow();
   });
 });

@@ -64,6 +64,24 @@ function trustIcon(host: HTMLElement): HTMLElement | null {
 }
 
 describe("lobbyCard trust lock", () => {
+  it("can hide the multiplayer count on a local recommendation", () => {
+    const host = document.createElement("div");
+    render(
+      lobbyCard({
+        lobby: lobby(),
+        subtitle: "FFA",
+        timeDisplay: "featured",
+        viewerTrusted: false,
+        showPlayerCount: false,
+        onClick: () => {},
+      }),
+      host,
+    );
+
+    expect(host.textContent).not.toContain("3/8");
+    expect(host.textContent).toContain("featured");
+  });
+
   it("shows no lock on a lobby that is not trusted-only", () => {
     expect(trustIcon(renderCard(lobby(), false))).toBeNull();
     expect(trustIcon(renderCard(lobby(), true))).toBeNull();

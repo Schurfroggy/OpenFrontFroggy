@@ -12,6 +12,7 @@ const COPIED_KEYS = [
   "gameMap",
   "gameMapSize",
   "difficulty",
+  "selfHostedAchievementsEnabled",
   "nations",
   "bots",
   "infiniteGold",
@@ -28,6 +29,7 @@ const COPIED_KEYS = [
   "doomsdayClock",
   "overtime",
   "anonymizeNames",
+  "allowPlayerTeamSelection",
   "nameReveals",
   "nameRevealPublicIds",
 ] as const satisfies readonly (keyof GameConfig)[];

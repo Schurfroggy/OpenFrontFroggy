@@ -50,6 +50,7 @@ import {
 import {
   AnalyticsRecord,
   ArchivedAnalyticsRecordSchema,
+  GameConfig,
   GameInfo,
 } from "../core/Schemas";
 import { UserSettings } from "../core/game/UserSettings";
@@ -278,6 +279,7 @@ async function requestUserMe(): Promise<{
 }
 
 export async function getUserMe(): Promise<UserMeResponse | false> {
+  if (ClientEnv.selfHosted?.() === true) return false;
   if (__userMe !== null) {
     return __userMe;
   }
@@ -2040,7 +2042,10 @@ export async function queueLobby(
 // (blocked third-party cookies, some iframes) is minted a new identity on each
 // JWT refresh, and a refresh landing between create and join leaves the host
 // in their own lobby as someone who is not its creator.
-export async function createLobby(): Promise<{
+export async function createLobby(
+  gameConfig?: GameConfig,
+  playerName?: string,
+): Promise<{
   lobby: GameInfo;
   creatorToken: string;
 }> {
@@ -2071,7 +2076,10 @@ export async function createLobby(): Promise<{
   }
   // Send JWT token for creator identification - server extracts persistentID from it
   // persistentID should never be exposed to other clients
-  const token = await getPlayToken();
+  // Self-hosted account ids are name-derived. Use the name owned by this tab
+  // when supplied: localStorage is shared between same-origin tabs and may
+  // currently contain a different local player's name.
+  const token = await getPlayToken(playerName);
   try {
     const response = await fetch(
       `${ClientEnv.serverHttpBase()}/api/create_game`,
@@ -2081,6 +2089,9 @@ export async function createLobby(): Promise<{
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
+        ...(gameConfig === undefined
+          ? {}
+          : { body: JSON.stringify(gameConfig) }),
       },
     );
 

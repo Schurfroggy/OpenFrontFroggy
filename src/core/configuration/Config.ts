@@ -38,6 +38,9 @@ declare global {
       assetManifest?: AssetManifest;
       cdnBase?: string;
       gameEnv?: string;
+      // Standalone friend-hosted mode. The game server is the only backend;
+      // account, commerce, matchmaking and public-platform services are off.
+      selfHosted?: boolean;
       // The fleet map + which entry served this page (docs/MultiServer.md).
       // Absent on a static page.
       cluster?: ClusterConfig;

@@ -1,6 +1,7 @@
 import { html, LitElement } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import { assetUrl } from "../../core/AssetUrls";
+import { translateText } from "../Utils";
 
 @customElement("cap-icon")
 export class CapIcon extends LitElement {
@@ -19,7 +20,7 @@ export class CapIcon extends LitElement {
       >
         <img
           src=${assetUrl("images/BottleCapIcon.svg")}
-          alt="Caps"
+          alt=${translateText("cosmetics.caps_currency")}
           style="width:${this.size}px; height:${this.size}px;"
           draggable="false"
         />

@@ -220,10 +220,18 @@ export class GameImpl implements Game {
     ];
     const pt = this._config.playerTeams();
     const isDuosTriosQuads = pt === Duos || pt === Trios || pt === Quads;
+    // Numeric team-count games permit intentional asymmetric human teams.
+    // Once the lobby has pinned anyone, leave room for every remaining nation
+    // and let the least-populated-team rule compensate instead of dropping AI.
+    const maxTeamSize =
+      typeof pt === "number" && allPlayers.some((p) => p.teamIndex !== null)
+        ? Infinity
+        : undefined;
     const playerToTeam = assignTeams(
       allPlayers,
       this.playerTeams,
       isDuosTriosQuads,
+      maxTeamSize,
     );
     for (const [playerInfo, team] of playerToTeam.entries()) {
       if (team === "kicked") {

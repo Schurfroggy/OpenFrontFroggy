@@ -9,6 +9,7 @@ import { crazyGamesSDK } from "./CrazyGamesSDK";
 import type { DesktopSessionState, SessionFailureKind } from "./DesktopShell";
 import { desktopLinkGate, isDesktopShell } from "./DesktopShell";
 import { showInGameAlert } from "./InGameModal";
+import { selfHostedAccountPlayToken } from "./SelfHostedAccount";
 import type { SteamTicketResult } from "./SteamSDK";
 import { steamSDK } from "./SteamSDK";
 import { generateCryptoRandomUUID, translateText } from "./Utils";
@@ -16,6 +17,10 @@ import { generateCryptoRandomUUID, translateText } from "./Utils";
 export type UserAuth = { jwt: string; claims: TokenPayload } | false;
 
 const PERSISTENT_ID_KEY = "player_persistent_id";
+const SELF_HOSTED_USERNAME_KEY = "username";
+const FNV64_OFFSET = 0xcbf29ce484222325n;
+const FNV64_PRIME = 0x100000001b3n;
+const UINT64_MASK = 0xffffffffffffffffn;
 
 let __jwt: string | null = null;
 let __refreshPromise: Promise<void> | null = null;
@@ -384,6 +389,9 @@ export function isSessionActive(sub: string): boolean {
 export async function userAuth(
   shouldRefresh: boolean = true,
 ): Promise<UserAuth> {
+  // Self-hosted servers deliberately have no account API. Multiplayer uses
+  // the deterministic name-derived id returned by getPlayToken() instead.
+  if (ClientEnv.selfHosted?.() === true) return false;
   try {
     const jwt = __jwt;
     if (!jwt) {
@@ -763,8 +771,68 @@ export async function sendMagicLink(email: string): Promise<boolean> {
   }
 }
 
+/**
+ * Stable UUID-shaped identity for a friend-hosted account name.
+ *
+ * This is deliberately deterministic: the same normalized name is the same
+ * account on every browser, while choosing another name creates another
+ * account. It is an identity key, not authentication — anybody who knows a
+ * name can use it on a trusted-friends server.
+ */
+export function selfHostedAccountId(playerName: string): string {
+  const canonical = playerName
+    .normalize("NFKC")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLocaleLowerCase("en-US");
+  if (canonical.length === 0) {
+    throw new Error("A player name is required in self-hosted mode");
+  }
+
+  const hash64 = (suffix: string): bigint => {
+    const bytes = new TextEncoder().encode(
+      `openfront-self-host-account\0${canonical}\0${suffix}`,
+    );
+    let hash = FNV64_OFFSET;
+    for (const byte of bytes) {
+      hash ^= BigInt(byte);
+      hash = (hash * FNV64_PRIME) & UINT64_MASK;
+    }
+    return hash;
+  };
+
+  const bytes = new Uint8Array(16);
+  for (const [start, hash] of [hash64("a"), hash64("b")].entries()) {
+    let value = hash;
+    for (let index = 7; index >= 0; index--) {
+      bytes[start * 8 + index] = Number(value & 0xffn);
+      value >>= 8n;
+    }
+  }
+  // RFC 4122 variant with a version-5 marker: the value is name-derived.
+  bytes[6] = (bytes[6] & 0x0f) | 0x50;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function selfHostedStoredAccountId(playerName?: string): string {
+  const name = playerName ?? localStorage.getItem(SELF_HOSTED_USERNAME_KEY);
+  if (name === null) {
+    throw new Error("No player name is available in self-hosted mode");
+  }
+  return selfHostedAccountId(name);
+}
+
 // WARNING: DO NOT EXPOSE THIS ID
-export async function getPlayToken(): Promise<string> {
+export async function getPlayToken(playerName?: string): Promise<string> {
+  if (ClientEnv.selfHosted?.() === true) {
+    const accountToken = await selfHostedAccountPlayToken();
+    if (accountToken !== null) return accountToken;
+    return selfHostedStoredAccountId(playerName);
+  }
   const result = await userAuth();
   if (result !== false) return result.jwt;
   return getPersistentIDFromLocalStorage();
@@ -772,6 +840,11 @@ export async function getPlayToken(): Promise<string> {
 
 // WARNING: DO NOT EXPOSE THIS ID
 export function getPersistentID(): string {
+  if (ClientEnv.selfHosted?.() === true) {
+    const accountToken = sessionStorage.getItem("selfHostedAccountPlayToken");
+    if (accountToken !== null) return accountToken;
+    return selfHostedStoredAccountId();
+  }
   const jwt = __jwt;
   if (!jwt) return getPersistentIDFromLocalStorage();
   const payload = decodeJwt(jwt);

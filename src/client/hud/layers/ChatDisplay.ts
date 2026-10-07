@@ -10,6 +10,7 @@ import {
 } from "../../../core/game/GameUpdates";
 import { onlyImages } from "../../../core/Util";
 import { Controller } from "../../Controller";
+import { translateText } from "../../Utils";
 import { GameView } from "../../view";
 
 interface ChatEvent {
@@ -138,7 +139,7 @@ export class ChatDisplay extends LitElement implements Controller {
                 : ""}"
               @click=${this.toggleHidden}
             >
-              Hide
+              ${translateText("chat.hide")}
             </button>
           </div>
 
@@ -148,7 +149,7 @@ export class ChatDisplay extends LitElement implements Controller {
               : "hidden"}"
             @click=${this.toggleHidden}
           >
-            Chat
+            ${translateText("chat.title")}
             <span
               class="${this.newEvents
                 ? ""

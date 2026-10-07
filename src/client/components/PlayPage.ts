@@ -1,6 +1,7 @@
-import { LitElement, html } from "lit";
+import { LitElement, html, nothing } from "lit";
 import { customElement } from "lit/decorators.js";
 import { assetUrl } from "../../core/AssetUrls";
+import { ClientEnv } from "../ClientEnv";
 import "./CosmeticBackground";
 import "./NavAccountMenu";
 import "./NavUtilityIcons";
@@ -72,7 +73,9 @@ export class PlayPage extends LitElement {
               class="col-start-3 justify-self-end shrink-0 flex items-center gap-0.5"
             >
               <nav-utility-icons size="mobile"></nav-utility-icons>
-              <nav-account-menu variant="mobile"></nav-account-menu>
+              ${ClientEnv.selfHosted?.() === true
+                ? nothing
+                : html`<nav-account-menu variant="mobile"></nav-account-menu>`}
             </div>
           </div>
         </div>
@@ -90,16 +93,20 @@ export class PlayPage extends LitElement {
 
           <!-- Left column: news banner + identity row, stacked tight. -->
           <div class="flex flex-col gap-2 min-w-0">
-            <news-box></news-box>
+            ${ClientEnv.selfHosted?.() === true
+              ? nothing
+              : html`<news-box></news-box>`}
 
             <!-- Identity row: username over the currently selected cosmetic background. -->
             <div
               class="relative bg-surface border-y border-white/10 overflow-visible flex items-center sm:min-h-[60px] sm:flex-1 sm:z-20 sm:border-y-0 sm:rounded-xl"
             >
               <!-- Selected skin/pattern fills the bubble like the player's territory in game. -->
-              <cosmetic-background
-                class="absolute inset-0 z-0 overflow-hidden sm:rounded-xl pointer-events-none"
-              ></cosmetic-background>
+              ${ClientEnv.selfHosted?.() === true
+                ? nothing
+                : html`<cosmetic-background
+                    class="absolute inset-0 z-0 overflow-hidden sm:rounded-xl pointer-events-none"
+                  ></cosmetic-background>`}
               <div
                 class="relative z-10 flex h-full w-full min-w-0 items-center bg-surface/80 p-1 sm:rounded-xl"
               >
@@ -112,18 +119,22 @@ export class PlayPage extends LitElement {
 
           <!-- Right column: Streaming Now (desktop only), stretched to the left column's
                full height so the top strip has no dead space. -->
-          <streaming-now
-            class="hidden lg:flex lg:h-full lg:flex-col w-full min-w-0"
-          ></streaming-now>
+          ${ClientEnv.selfHosted?.() === true
+            ? nothing
+            : html`<streaming-now
+                class="hidden lg:flex lg:h-full lg:flex-col w-full min-w-0"
+              ></streaming-now>`}
         </div>
 
         <game-mode-selector></game-mode-selector>
 
         <!-- Desktop gets the compact footer button instead. -->
-        <steam-wishlist
-          campaign="home_mobile"
-          class="block px-2 pb-4 lg:hidden"
-        ></steam-wishlist>
+        ${ClientEnv.selfHosted?.() === true
+          ? nothing
+          : html`<steam-wishlist
+              campaign="home_mobile"
+              class="block px-2 pb-4 lg:hidden"
+            ></steam-wishlist>`}
       </div>
     `;
   }

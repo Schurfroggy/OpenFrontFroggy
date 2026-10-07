@@ -80,6 +80,15 @@ describe("RenderHtml", () => {
     expect(rendered).toContain('"numWorkers":1');
   });
 
+  test("injects the self-hosted mode flag", async () => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "render-html-"));
+    const htmlPath = path.join(tempDir, "index.html");
+    await fs.writeFile(htmlPath, "selfHosted: <%- selfHosted %>", "utf8");
+    vi.stubEnv("SELF_HOSTED", "true");
+
+    expect(await getAppShellContent(htmlPath)).toBe("selfHosted: true");
+  });
+
   test("sets shared-cache headers for the app shell", () => {
     const headers = new Map<string, string>();
     const response = {
@@ -341,6 +350,20 @@ describe("RenderHtml environment-only render", () => {
     expect(bootstrapConfig(html).gitCommit).toBe("abc");
   });
 
+  it("keeps the renderer-required promo controller mounted in self-hosted mode", async () => {
+    vi.stubEnv("SELF_HOSTED", "true");
+    const html = await renderHtmlContent(REAL_TEMPLATE);
+
+    expect(bootstrapConfig(html).selfHosted).toBe(true);
+    expect(html).toContain(
+      '<script type="module" src="/src/client/Main.ts"></script>',
+    );
+    expect(html).toContain("<in-game-promo></in-game-promo>");
+    expect(html).not.toContain("<featured-stream></featured-stream>");
+    expect(html).not.toContain("crazygames-sdk-v3.js");
+    expect(html).not.toContain("challenges.cloudflare.com/turnstile");
+  });
+
   // A full render is what the game server serves and what the legacy
   // index-<short>.html replay shell is built from, so guarding those lines had
   // to leave it byte-for-byte identical — same order, same eight-space
@@ -355,6 +378,7 @@ describe("RenderHtml environment-only render", () => {
         "        assetManifest: {},",
         '        cdnBase: "",',
         `        gameEnv: ${JSON.stringify(ServerEnv.gameEnvName())},`,
+        "        selfHosted: false,",
         `        cluster: ${JSON.stringify(ServerEnv.cluster())},`,
         '        instanceLetter: "a",',
         '        turnstileSiteKey: "test-key",',

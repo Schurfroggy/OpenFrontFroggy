@@ -20,6 +20,7 @@ const EDITABLE: { [K in keyof GameConfig]?: GameConfig[K] } = {
   gameMap: GameMapType.Europe,
   gameMapSize: GameMapSize.Compact,
   difficulty: Difficulty.Hard,
+  selfHostedAchievementsEnabled: false,
   nations: "disabled",
   bots: 42,
   infiniteGold: true,
@@ -36,6 +37,7 @@ const EDITABLE: { [K in keyof GameConfig]?: GameConfig[K] } = {
   doomsdayClock: { enabled: true, speed: "fast" },
   overtime: { enabled: true, startMinutes: 20 },
   anonymizeNames: true,
+  allowPlayerTeamSelection: true,
   nameReveals: ["c1000000"],
   nameRevealPublicIds: ["pub-b"],
 };

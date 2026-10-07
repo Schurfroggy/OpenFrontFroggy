@@ -191,11 +191,16 @@ export interface ToggleOptionConfig {
 }
 
 export interface GameConfigSettingsData {
+  advancedSettings?: {
+    enabled: boolean;
+  };
   map: {
     selected: GameMapType;
     useRandom: boolean;
+    locked?: boolean;
     randomMapDivider?: boolean;
     showMedals?: boolean;
+    showDifficultyAchievements?: boolean;
     mapWins?: Map<GameMapType, Set<Difficulty>>;
   };
   difficulty: {
@@ -204,6 +209,7 @@ export interface GameConfigSettingsData {
   };
   gameMode: {
     selected: GameMode;
+    locked?: boolean;
   };
   teamCount: {
     selected: TeamCountConfig;
@@ -266,6 +272,14 @@ export class GameConfigSettings extends LitElement {
     this.mapSearchQuery = "";
   };
 
+  private renderPresetLockedBadge(): TemplateResult {
+    return html`<span
+      class="rounded-full border border-malibu-blue/30 bg-malibu-blue/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-malibu-blue"
+    >
+      ${translateText("game_settings.preset_locked")}
+    </span>`;
+  }
+
   private handleSelectMap = (map: GameMapType) => {
     this.emit("map-selected", { map });
   };
@@ -318,6 +332,53 @@ export class GameConfigSettings extends LitElement {
   private handleUnitToggle = (unit: UnitType, checked: boolean) => {
     this.emit("unit-toggle-changed", { unit, checked });
   };
+
+  private handleAdvancedSettingsChange = (enabled: boolean) => {
+    this.emit("advanced-settings-changed", { enabled });
+  };
+
+  private renderAdvancedSettingsControl(enabled: boolean): TemplateResult {
+    return html`
+      <section
+        class="rounded-xl border ${enabled
+          ? "border-amber-500/40 bg-amber-500/10"
+          : "border-white/10 bg-white/5"} p-5"
+      >
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <div class="min-w-0 flex-1">
+            <div class="text-base font-bold text-white">
+              ${translateText("game_settings.advanced_settings")}
+            </div>
+            <div
+              class="mt-1 text-sm ${enabled
+                ? "text-amber-300"
+                : "text-white/55"}"
+            >
+              ${translateText(
+                enabled
+                  ? "game_settings.advanced_settings_enabled_warning"
+                  : "game_settings.advanced_settings_warning",
+              )}
+            </div>
+          </div>
+          <button
+            type="button"
+            data-test-advanced-settings
+            class="shrink-0 rounded-lg border px-4 py-2 text-sm font-bold transition-colors ${enabled
+              ? "border-amber-400/40 bg-amber-500/20 text-amber-200 hover:bg-amber-500/30"
+              : "border-malibu-blue/40 bg-malibu-blue/15 text-malibu-blue hover:bg-malibu-blue/25"}"
+            @click=${() => this.handleAdvancedSettingsChange(!enabled)}
+          >
+            ${translateText(
+              enabled
+                ? "game_settings.restore_standard_settings"
+                : "game_settings.enable_advanced_settings",
+            )}
+          </button>
+        </div>
+      </section>
+    `;
+  }
 
   private renderOptionToggle(toggle: ToggleOptionConfig): TemplateResult {
     if (toggle.hidden) return html``;
@@ -442,15 +503,20 @@ export class GameConfigSettings extends LitElement {
           html`<map-picker
             .selectedMap=${settings.map.selected}
             .useRandomMap=${settings.map.useRandom}
+            .locked=${settings.map.locked ?? false}
             .randomMapDivider=${settings.map.randomMapDivider ?? false}
             .showMedals=${settings.map.showMedals ?? false}
+            .showDifficultyAchievements=${settings.map
+              .showDifficultyAchievements ?? false}
             .mapWins=${settings.map.mapWins ?? new Map()}
             .onSelectMap=${this.handleSelectMap}
             .onSelectRandom=${this.handleSelectRandom}
             .searchQuery=${this.mapSearchQuery}
           ></map-picker>`,
           undefined,
-          this.renderMapSearchInput(),
+          settings.map.locked
+            ? this.renderPresetLockedBadge()
+            : this.renderMapSearchInput(),
         )}
         ${renderSection(
           DIFFICULTY_ICON,
@@ -505,12 +571,21 @@ export class GameConfigSettings extends LitElement {
           "host_modal.mode",
           html`
             <div class="grid grid-cols-2 gap-4">
-              ${[GameMode.FFA, GameMode.Team].map((mode) => {
+              ${(settings.gameMode.locked
+                ? [settings.gameMode.selected]
+                : [GameMode.FFA, GameMode.Team]
+              ).map((mode) => {
                 const isSelected = settings.gameMode.selected === mode;
                 return html`
                   <button
-                    class="${cardClass(isSelected, "py-6 text-center")}"
-                    @click=${() => this.handleGameModeSelect(mode)}
+                    ?disabled=${settings.gameMode.locked}
+                    class="${cardClass(
+                      isSelected,
+                      `py-6 text-center ${settings.gameMode.locked ? "cursor-not-allowed" : ""}`,
+                    )}"
+                    @click=${() =>
+                      !settings.gameMode.locked &&
+                      this.handleGameModeSelect(mode)}
                   >
                     <span
                       class="text-sm font-bold text-white uppercase tracking-widest"
@@ -524,6 +599,8 @@ export class GameConfigSettings extends LitElement {
               })}
             </div>
           `,
+          undefined,
+          settings.gameMode.locked ? this.renderPresetLockedBadge() : undefined,
         )}
         ${settings.gameMode.selected === GameMode.FFA
           ? nothing
@@ -558,34 +635,23 @@ export class GameConfigSettings extends LitElement {
                 </div>
               </section>
             `}
-        ${renderSection(
-          OPTIONS_ICON,
-          "text-orange-400",
-          "bg-orange-500/20",
-          settings.options.titleKey,
-          html`
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div
-                class="col-span-2 rounded-xl p-4 flex flex-col justify-center border transition-all duration-200 ${settings
-                  .options.bots.value > 0
-                  ? ACTIVE_CARD
-                  : INACTIVE_CARD}"
-              >
-                <fluent-slider
-                  min="0"
-                  max="400"
-                  step="1"
-                  .value=${settings.options.bots.value}
-                  labelKey=${settings.options.bots.labelKey}
-                  disabledKey=${settings.options.bots.disabledKey}
-                  @value-changed=${this.handleBotsChanged}
-                ></fluent-slider>
-              </div>
-
-              ${settings.options.nations && !settings.options.nations.hidden
-                ? html`<div
+        ${settings.advancedSettings
+          ? this.renderAdvancedSettingsControl(
+              settings.advancedSettings.enabled,
+            )
+          : nothing}
+        ${settings.advancedSettings?.enabled === false
+          ? nothing
+          : renderSection(
+              OPTIONS_ICON,
+              "text-orange-400",
+              "bg-orange-500/20",
+              settings.options.titleKey,
+              html`
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div
                     class="col-span-2 rounded-xl p-4 flex flex-col justify-center border transition-all duration-200 ${settings
-                      .options.nations.value > 0
+                      .options.bots.value > 0
                       ? ACTIVE_CARD
                       : INACTIVE_CARD}"
                   >
@@ -593,55 +659,81 @@ export class GameConfigSettings extends LitElement {
                       min="0"
                       max="400"
                       step="1"
-                      .value=${settings.options.nations.value}
-                      .defaultValue=${settings.options.nations.defaultValue}
-                      defaultLabelKey="common.map_default"
-                      labelKey=${settings.options.nations.labelKey}
-                      disabledKey=${settings.options.nations.disabledKey}
-                      @value-changed=${this.handleNationsChanged}
+                      .value=${settings.options.bots.value}
+                      labelKey=${settings.options.bots.labelKey}
+                      disabledKey=${settings.options.bots.disabledKey}
+                      @value-changed=${this.handleBotsChanged}
                     ></fluent-slider>
-                  </div>`
-                : nothing}
-              ${settings.options.toggles.map((toggle) =>
-                this.renderOptionToggle(toggle),
-              )}
-              ${settings.options.inputCards}
-            </div>
-          `,
-        )}
-        ${settings.hostCheats?.visible
-          ? renderSection(
-              HOST_CHEATS_ICON,
-              "text-yellow-400",
-              "bg-yellow-500/20",
-              settings.hostCheats.titleKey,
-              html`
-                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                  ${settings.hostCheats.toggles.map((toggle) =>
-                    renderTextCardButton(
-                      translateText(toggle.labelKey),
-                      toggle.checked,
-                      () => this.handleHostCheatToggle(toggle),
-                      "p-4 text-center",
-                    ),
+                  </div>
+
+                  ${settings.options.nations && !settings.options.nations.hidden
+                    ? html`<div
+                        class="col-span-2 rounded-xl p-4 flex flex-col justify-center border transition-all duration-200 ${settings
+                          .options.nations.value > 0
+                          ? ACTIVE_CARD
+                          : INACTIVE_CARD}"
+                      >
+                        <fluent-slider
+                          min="0"
+                          max="400"
+                          step="1"
+                          .value=${settings.options.nations.value}
+                          .defaultValue=${settings.options.nations.defaultValue}
+                          defaultLabelKey="common.map_default"
+                          labelKey=${settings.options.nations.labelKey}
+                          disabledKey=${settings.options.nations.disabledKey}
+                          @value-changed=${this.handleNationsChanged}
+                        ></fluent-slider>
+                      </div>`
+                    : nothing}
+                  ${settings.options.toggles.map((toggle) =>
+                    this.renderOptionToggle(toggle),
                   )}
-                  ${settings.hostCheats.inputCards}
+                  ${settings.options.inputCards}
                 </div>
               `,
-            )
-          : nothing}
-        ${renderSection(
-          ENABLES_ICON,
-          "text-teal-400",
-          "bg-teal-500/20",
-          settings.unitTypes.titleKey,
-          html`
-            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-              ${this.renderUnitTypeOptions(settings.unitTypes.disabledUnits)}
-            </div>
-          `,
-          "space-y-6 pb-6",
-        )}
+            )}
+        ${settings.advancedSettings?.enabled === false
+          ? nothing
+          : settings.hostCheats?.visible
+            ? renderSection(
+                HOST_CHEATS_ICON,
+                "text-yellow-400",
+                "bg-yellow-500/20",
+                settings.hostCheats.titleKey,
+                html`
+                  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    ${settings.hostCheats.toggles.map((toggle) =>
+                      renderTextCardButton(
+                        translateText(toggle.labelKey),
+                        toggle.checked,
+                        () => this.handleHostCheatToggle(toggle),
+                        "p-4 text-center",
+                      ),
+                    )}
+                    ${settings.hostCheats.inputCards}
+                  </div>
+                `,
+              )
+            : nothing}
+        ${settings.advancedSettings?.enabled === false
+          ? nothing
+          : renderSection(
+              ENABLES_ICON,
+              "text-teal-400",
+              "bg-teal-500/20",
+              settings.unitTypes.titleKey,
+              html`
+                <div
+                  class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4"
+                >
+                  ${this.renderUnitTypeOptions(
+                    settings.unitTypes.disabledUnits,
+                  )}
+                </div>
+              `,
+              "space-y-6 pb-6",
+            )}
       </div>
     `;
   }

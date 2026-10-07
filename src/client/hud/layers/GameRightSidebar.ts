@@ -376,7 +376,12 @@ export class GameRightSidebar extends LitElement implements Controller {
         ${this.maybeRenderReplayButtons()}
 
         <div class="cursor-pointer" @click=${this.onSettingsButtonClick}>
-          <img src=${settingsIcon} alt="settings" width="20" height="20" />
+          <img
+            src=${settingsIcon}
+            alt=${translateText("main.settings")}
+            width="20"
+            height="20"
+          />
         </div>
 
         ${document.fullscreenEnabled && !this.hideFullscreenButton
@@ -385,6 +390,7 @@ export class GameRightSidebar extends LitElement implements Controller {
               @click=${this.onFullscreenButtonClick}
             >
               <img
+                data-fullscreen-button
                 src=${this.isFullscreen ? exitFullscreenIcon : fullscreenIcon}
                 alt=${this.isFullscreen
                   ? translateText("fullscreen.exit")
@@ -396,7 +402,12 @@ export class GameRightSidebar extends LitElement implements Controller {
           : ""}
 
         <div class="cursor-pointer" @click=${this.onExitButtonClick}>
-          <img src=${exitIcon} alt="exit" width="20" height="20" />
+          <img
+            src=${exitIcon}
+            alt=${translateText("main.quit")}
+            width="20"
+            height="20"
+          />
         </div>
       </aside>
       <doomsday-clock-panel
@@ -428,7 +439,7 @@ export class GameRightSidebar extends LitElement implements Controller {
             <div class="cursor-pointer" @click=${this.toggleReplayPanel}>
               <img
                 src=${FastForwardIconSolid}
-                alt="replay"
+                alt=${translateText("replay_viewer.timeline")}
                 width="20"
                 height="20"
               />
@@ -440,7 +451,9 @@ export class GameRightSidebar extends LitElement implements Controller {
             <div class="cursor-pointer" @click=${this.onPauseButtonClick}>
               <img
                 src=${this.isPaused ? playIcon : pauseIcon}
-                alt="play/pause"
+                alt=${this.isPaused
+                  ? translateText("replay_viewer.play")
+                  : translateText("replay_viewer.pause")}
                 width="20"
                 height="20"
               />

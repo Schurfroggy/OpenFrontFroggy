@@ -296,11 +296,14 @@ export function createRenderer(
   immunityTimer.game = game;
   immunityTimer.eventBus = eventBus;
 
-  const inGamePromo = document.querySelector("in-game-promo") as InGamePromo;
+  const inGamePromo = document.querySelector("in-game-promo");
   if (!(inGamePromo instanceof InGamePromo)) {
-    console.error("in-game promo not found");
+    // Promotional UI is optional for self-hosted/static shells. Its absence
+    // must never prevent the actual game renderer from starting.
+    console.warn("in-game promo not found");
+  } else {
+    inGamePromo.game = game;
   }
-  inGamePromo.game = game;
 
   const tutorialPanel = document.querySelector(
     "tutorial-panel",
@@ -359,7 +362,7 @@ export function createRenderer(
     playerPanel,
     headsUpMessage,
     multiTabModal,
-    inGamePromo,
+    ...(inGamePromo instanceof InGamePromo ? [inGamePromo] : []),
     tutorialPanel,
     alertFrame,
     performanceOverlay,

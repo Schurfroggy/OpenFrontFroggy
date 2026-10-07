@@ -32,6 +32,9 @@ export class ServerEnv {
   static env(): GameEnv {
     return ServerEnv.gameEnv;
   }
+  static selfHosted(): boolean {
+    return process.env.SELF_HOSTED === "true";
+  }
   static gameEnvName(): string {
     switch (ServerEnv.gameEnv) {
       case GameEnv.Dev:

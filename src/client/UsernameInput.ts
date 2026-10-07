@@ -1,4 +1,4 @@
-import { html, LitElement } from "lit";
+import { html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { translateText } from "../client/Utils";
 import { UserMeResponse } from "../core/ApiSchemas";
@@ -13,6 +13,7 @@ import {
 } from "../core/validations/username";
 import { getUserMe, invalidateUserMe } from "./Api";
 import { checkClanTagOwnership } from "./ClanApi";
+import { ClientEnv } from "./ClientEnv";
 import { verifiedBadge } from "./components/ui/VerifiedBadge";
 import { crazyGamesSDK } from "./CrazyGamesSDK";
 import { showInGameAlert, showInGameConfirm } from "./InGameModal";
@@ -155,6 +156,7 @@ export class UsernameInput extends LitElement {
 
   // Clans aren't supported on CrazyGames — hide the tag input and never submit one.
   private readonly onCrazyGames = crazyGamesSDK.isOnCrazyGames();
+  private readonly selfHosted = ClientEnv.selfHosted?.() === true;
   // Steam identity is fixed for the session (no login/logout events like
   // CrazyGames), so it's only used to seed the name once in connectedCallback.
   private readonly onSteam = steamSDK.isOnSteam();
@@ -199,7 +201,7 @@ export class UsernameInput extends LitElement {
     super();
     // Before anything can write a username: this reads the absence of one as
     // "this profile is new", and loadStoredUsername destroys that evidence.
-    resolveVerifiedDefaultCohort(this.onCrazyGames);
+    resolveVerifiedDefaultCohort(this.onCrazyGames || this.selfHosted);
     // Account state for the verified-name toggle. Same document-level pattern
     // as AccountModal; Main dispatches this after auth resolves and on
     // CrazyGames sign-in.
@@ -524,8 +526,8 @@ export class UsernameInput extends LitElement {
    */
   public resolvedName(): ResolvedPlayerName {
     return resolvePlayerName({
-      verifiedName: this.verifiedName(),
-      verifiedOptIn: this.verifiedActive,
+      verifiedName: this.selfHosted ? null : this.verifiedName(),
+      verifiedOptIn: this.selfHosted ? false : this.verifiedActive,
       storedName: this.baseUsername,
       persona: this.persona,
       generatedName: this.generatedName,
@@ -538,10 +540,12 @@ export class UsernameInput extends LitElement {
 
   /** True when the player is playing under their verified account name. */
   public isVerified(): boolean {
+    if (this.selfHosted) return false;
     return this.resolvedName().verified;
   }
 
   public getClanTag(): string | null {
+    if (this.selfHosted) return null;
     return this.clanTag.length >= MIN_CLAN_TAG_LENGTH &&
       this.clanTag.length <= MAX_CLAN_TAG_LENGTH &&
       validateClanTag(this.clanTag).isValid
@@ -581,6 +585,12 @@ export class UsernameInput extends LitElement {
   }
 
   private startClanCheck() {
+    if (this.selfHosted) {
+      this.clanTag = "";
+      this.clanCheckPending = false;
+      this.clanCheck = Promise.resolve(null);
+      return;
+    }
     const gen = ++this.clanCheckGen;
     const tag = this.clanTag;
     this.clanTagOwnershipError = "";
@@ -756,7 +766,7 @@ export class UsernameInput extends LitElement {
     const storedUsername = this.onCrazyGames
       ? null
       : localStorage.getItem(usernameKey);
-    if (storedUsername) {
+    if (storedUsername && !this.selfHosted) {
       this.clanTag = localStorage.getItem(clanTagKey) ?? "";
     }
     // No persona yet — it arrives asynchronously and reseeds in
@@ -795,7 +805,8 @@ export class UsernameInput extends LitElement {
       <!-- The name field takes whatever the tag picker and trailing button
            leave, so the row always fills the strip. -->
       <div class="flex items-center w-full h-full gap-1.5 sm:gap-2">
-        ${this.renderClanControl()} ${this.renderNameControl()}
+        ${this.selfHosted ? nothing : this.renderClanControl()}
+        ${this.renderNameControl()}
       </div>
       <!-- One positioned slot, stacked. An error and the reservation reminder
            are not alternatives: the error is transient and self-inflicted
@@ -1009,6 +1020,7 @@ export class UsernameInput extends LitElement {
   // Name field. Verified play swaps the free-text input for a badge-led chip so
   // the state reads as "this is my account name", not "the input broke".
   private renderNameControl() {
+    if (this.selfHosted) return this.renderNameInput();
     return html`
       ${this.verifiedActive
         ? this.renderVerifiedChip()
@@ -1069,6 +1081,17 @@ export class UsernameInput extends LitElement {
   }
 
   private renderNameInput() {
+    if (this.selfHosted) {
+      return html`
+        <div
+          class="flex items-center text-left text-white text-ellipsis overflow-hidden cursor-default ${NAME_BOX} ${NAME_TEXT}"
+          aria-label=${translateText("username.enter_username")}
+          title=${this.baseUsername}
+        >
+          <span class="truncate">${this.baseUsername}</span>
+        </div>
+      `;
+    }
     return html`
       <input
         type="text"
@@ -1078,7 +1101,7 @@ export class UsernameInput extends LitElement {
         minlength="${MIN_USERNAME_LENGTH}"
         maxlength="${MAX_USERNAME_LENGTH}"
         aria-label=${translateText("username.enter_username")}
-        class="text-left text-white placeholder-white/50 transition-colors text-ellipsis hover:bg-white/5 focus:bg-white/5 focus:outline-none focus:ring-2 focus:ring-malibu-blue/60 ${NAME_BOX} ${NAME_TEXT}"
+        class="text-left text-white placeholder-white/50 transition-colors text-ellipsis hover:bg-white/5 focus:bg-white/5 focus:ring-2 focus:ring-malibu-blue/60 focus:outline-none ${NAME_BOX} ${NAME_TEXT}"
       />
     `;
   }
@@ -1211,7 +1234,7 @@ export class UsernameInput extends LitElement {
     // must stay blocked until the player puts a name back.
     const trimmedBase = this.baseUsername.trim();
 
-    const clanTagResult = validateClanTag(this.clanTag);
+    const clanTagResult = validateClanTag(this.selfHosted ? "" : this.clanTag);
     if (!clanTagResult.isValid) {
       this._isValid = false;
       this.validationError = clanTagResult.error ?? "";

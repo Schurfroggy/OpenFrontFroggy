@@ -34,6 +34,7 @@ import {
   LiveStats,
   ReportReason,
   ServerMessage,
+  TeamAssignmentPreset,
   Winner,
 } from "../core/Schemas";
 import {
@@ -216,6 +217,17 @@ export class SendUpdateGameConfigIntentEvent implements GameEvent {
   constructor(public readonly config: Partial<GameConfig>) {}
 }
 
+export class SendSetPlayerTeamIntentEvent implements GameEvent {
+  constructor(
+    public readonly targetClientID: ClientID,
+    public readonly teamIndex: number | null,
+  ) {}
+}
+
+export class SendApplyTeamPresetIntentEvent implements GameEvent {
+  constructor(public readonly preset: TeamAssignmentPreset) {}
+}
+
 export class SendToggleGameStartTimer implements GameEvent {
   constructor() {}
 }
@@ -353,6 +365,13 @@ export class Transport {
 
     this.subscribe(SendUpdateGameConfigIntentEvent, (e) =>
       this.onSendUpdateGameConfigIntent(e),
+    );
+
+    this.subscribe(SendSetPlayerTeamIntentEvent, (e) =>
+      this.onSendSetPlayerTeamIntent(e),
+    );
+    this.subscribe(SendApplyTeamPresetIntentEvent, (e) =>
+      this.onSendApplyTeamPresetIntent(e),
     );
 
     this.subscribe(SendToggleGameStartTimer, (e) =>
@@ -703,7 +722,9 @@ export class Transport {
   async joinGame() {
     // Only the first join: the token is short-lived, and a later reconnect
     // must not present one that has since expired.
-    const token = this.lobbyConfig.creatorToken ?? (await getPlayToken());
+    const token =
+      this.lobbyConfig.creatorToken ??
+      (await getPlayToken(this.lobbyConfig.playerName));
     delete this.lobbyConfig.creatorToken;
     this.sendMsg({
       type: "join",
@@ -726,7 +747,7 @@ export class Transport {
       gameID: this.lobbyConfig.gameID,
       // Note: clientID is not sent - server looks it up from persistentID in token
       lastTurn: lastTurn,
-      token: await getPlayToken(),
+      token: await getPlayToken(this.lobbyConfig.playerName),
       gitCommit: ClientEnv.gitCommit(),
     } satisfies ClientRejoinMessage);
   }
@@ -992,6 +1013,18 @@ export class Transport {
       type: "update_game_config",
       config: event.config,
     });
+  }
+
+  private onSendSetPlayerTeamIntent(event: SendSetPlayerTeamIntentEvent) {
+    this.sendIntent({
+      type: "set_player_team",
+      targetClientID: event.targetClientID,
+      teamIndex: event.teamIndex,
+    });
+  }
+
+  private onSendApplyTeamPresetIntent(event: SendApplyTeamPresetIntentEvent) {
+    this.sendIntent({ type: "apply_team_preset", preset: event.preset });
   }
 
   private onSendToggleGameStartTimer(event: SendToggleGameStartTimer) {

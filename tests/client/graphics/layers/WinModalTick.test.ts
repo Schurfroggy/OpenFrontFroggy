@@ -5,7 +5,20 @@ import type { WinModal } from "../../../../src/client/hud/layers/WinModal";
 import { SendWinnerEvent } from "../../../../src/client/Transport";
 import type { GameView } from "../../../../src/client/view";
 import { EventBus } from "../../../../src/core/EventBus";
+import {
+  Difficulty,
+  GameMapType,
+  GameType,
+} from "../../../../src/core/game/Game";
 import { GameUpdateType } from "../../../../src/core/game/GameUpdates";
+
+const achievementMocks = vi.hoisted(() => ({
+  record: vi.fn(async () => true),
+}));
+
+vi.mock("../../../../src/client/SelfHostedAchievements", () => ({
+  recordSelfHostedAchievement: achievementMocks.record,
+}));
 
 vi.mock("../../../../src/client/Utils", () => ({
   translateText: vi.fn((key: string) => key),
@@ -48,6 +61,8 @@ function makeGame(opts: {
     clientID: () => string | null;
     displayName: () => string;
   };
+  gameType?: GameType;
+  achievementEligible?: boolean;
 }): GameView {
   const winUpdate = { winner: opts.winner, allPlayersStats: {} };
   return {
@@ -56,11 +71,21 @@ function makeGame(opts: {
       hasSpawned: () => true,
       team: () => opts.myTeam ?? null,
       clientID: () => opts.myClientID ?? null,
+      displayName: () => "Alice",
     }),
     inSpawnPhase: () => false,
     updatesSinceLastTick: () => ({ [GameUpdateType.Win]: [winUpdate] }),
     playerByClientID: () => opts.winnerPlayer,
-    config: () => ({ gameConfig: () => ({ rankedType: undefined }) }),
+    config: () => ({
+      gameConfig: () => ({
+        rankedType: undefined,
+        gameType: opts.gameType,
+        selfHostedAchievementsEnabled: opts.achievementEligible ?? true,
+        gameMap: GameMapType.SouthAmerica,
+        difficulty: Difficulty.Hard,
+      }),
+    }),
+    gameID: () => "a123456789",
   } as unknown as GameView;
 }
 
@@ -94,6 +119,41 @@ describe("WinModal tick win handling", () => {
     expect(events[0].winner).toEqual(["team", "Blue"]);
     expect(crazyGamesSDK.happytime).toHaveBeenCalled();
     await vi.waitFor(() => expect(modal!.isVisible).toBe(true));
+  });
+
+  it("records a private team win as a multiplayer map achievement", () => {
+    setup(
+      makeGame({
+        winner: ["team", "Blue"],
+        myTeam: "Blue",
+        gameType: GameType.Private,
+      }),
+    );
+
+    modal!.tick();
+
+    expect(achievementMocks.record).toHaveBeenCalledWith({
+      playerName: "Alice",
+      mapName: GameMapType.SouthAmerica,
+      difficulty: Difficulty.Hard,
+      source: "multiplayer",
+      gameId: "a123456789",
+    });
+  });
+
+  it("does not record a win after advanced settings were enabled", () => {
+    setup(
+      makeGame({
+        winner: ["team", "Blue"],
+        myTeam: "Blue",
+        gameType: GameType.Private,
+        achievementEligible: false,
+      }),
+    );
+
+    modal!.tick();
+
+    expect(achievementMocks.record).not.toHaveBeenCalled();
   });
 
   it("emits the winner without celebrating when another team wins", async () => {

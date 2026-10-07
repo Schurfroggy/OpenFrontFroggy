@@ -98,6 +98,12 @@ const SAMPLE_INTENTS: StampedIntent[] = [
   { type: "delete_unit", clientID: P3, unitId: 9 },
   { type: "mark_disconnected", clientID: P1, isDisconnected: true },
   { type: "kick_player", clientID: P1, targetClientID: P2 },
+  { type: "set_player_team", clientID: P1, targetClientID: P2, teamIndex: 1 },
+  {
+    type: "apply_team_preset",
+    clientID: P1,
+    preset: "humans_together",
+  },
   {
     type: "quick_chat",
     clientID: P1,
@@ -189,6 +195,14 @@ const CLIENT_MESSAGES: ClientMessage[] = [
   {
     type: "intent",
     intent: { type: "attack", targetID: P3, troops: 17.25 },
+  },
+  {
+    type: "intent",
+    intent: { type: "set_player_team", targetClientID: P2, teamIndex: null },
+  },
+  {
+    type: "intent",
+    intent: { type: "apply_team_preset", preset: "balanced" },
   },
   {
     type: "join",
@@ -448,6 +462,23 @@ describe("zbin wire: client messages", () => {
     // Both are sent before the game starts, when neither peer has a table.
     for (const msg of CLIENT_MESSAGES.filter(
       (m) => m.type === "join" || m.type === "rejoin",
+    )) {
+      const decoded = decodeClientMessage(
+        encodeClientMessage(msg, undefined),
+        undefined,
+      );
+      expect(decoded).toEqual(viaJson(ClientMessageSchema, msg));
+    }
+  });
+
+  it("round-trips lobby team intents before a game dictionary exists", () => {
+    // Team assignment happens in the lobby, before the start message creates
+    // the client-id dictionary. Both directions must therefore use inline ids.
+    for (const msg of CLIENT_MESSAGES.filter(
+      (m) =>
+        m.type === "intent" &&
+        (m.intent.type === "set_player_team" ||
+          m.intent.type === "apply_team_preset"),
     )) {
       const decoded = decodeClientMessage(
         encodeClientMessage(msg, undefined),

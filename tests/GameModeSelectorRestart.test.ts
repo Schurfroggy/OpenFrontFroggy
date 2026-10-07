@@ -54,9 +54,53 @@ vi.mock("../src/client/InGameModal", async (importOriginal) => {
 });
 
 import { ClientEnv } from "../src/client/ClientEnv";
-import { GameModeSelector } from "../src/client/GameModeSelector";
+import {
+  GameModeSelector,
+  highestSelfHostedAchievementDifficulty,
+  randomSelfHostedPresets,
+  SELF_HOSTED_PRESET_COUNT,
+  SELF_HOSTED_PRESET_ROTATION_MS,
+} from "../src/client/GameModeSelector";
 import { showInGameAlert } from "../src/client/InGameModal";
 import * as ServerList from "../src/client/ServerList";
+import { Difficulty, GameMode, maps } from "../src/core/game/Game";
+
+describe("self-hosted featured preset rotation", () => {
+  it("selects five distinct real maps with supported modes", () => {
+    const presets = randomSelfHostedPresets(
+      SELF_HOSTED_PRESET_COUNT,
+      () => 0.99,
+    );
+
+    expect(presets).toHaveLength(SELF_HOSTED_PRESET_COUNT);
+    expect(new Set(presets.map((preset) => preset.map)).size).toBe(
+      SELF_HOSTED_PRESET_COUNT,
+    );
+    expect(
+      presets.every((preset) => maps.some((map) => map.type === preset.map)),
+    ).toBe(true);
+    expect(presets.every((preset) => preset.mode === GameMode.Team)).toBe(true);
+  });
+
+  it("refreshes each five-map group every thirty seconds", () => {
+    expect(SELF_HOSTED_PRESET_ROTATION_MS).toBe(30_000);
+  });
+
+  it("can generate free-for-all presets", () => {
+    const presets = randomSelfHostedPresets(1, () => 0);
+
+    expect(presets[0]?.mode).toBe(GameMode.FFA);
+  });
+
+  it("shows the highest difficulty earned for a featured map", () => {
+    expect(
+      highestSelfHostedAchievementDifficulty(
+        new Set([Difficulty.Easy, Difficulty.Hard]),
+      ),
+    ).toBe(Difficulty.Hard);
+    expect(highestSelfHostedAchievementDifficulty(new Set())).toBeUndefined();
+  });
+});
 
 describe("GameModeSelector lobby-socket lifecycle", () => {
   beforeEach(() => {

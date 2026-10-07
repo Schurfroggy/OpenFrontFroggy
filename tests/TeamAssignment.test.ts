@@ -7,7 +7,11 @@ import {
   Quads,
   Trios,
 } from "../src/core/game/Game";
-import { assignTeams, resolveTeamsList } from "../src/core/game/TeamAssignment";
+import {
+  assignTeams,
+  assignTeamsLobbyPreview,
+  resolveTeamsList,
+} from "../src/core/game/TeamAssignment";
 
 const teams = [ColoredTeams.Red, ColoredTeams.Blue];
 
@@ -464,6 +468,36 @@ describe("assignTeams", () => {
     for (const n of nations) {
       expect(result.get(n)).toEqual(ColoredTeams.Blue);
     }
+  });
+});
+
+describe("assignTeamsLobbyPreview", () => {
+  it("keeps every player in numeric-team games with asymmetric pins", () => {
+    const pinned = new PlayerInfo(
+      "Pinned",
+      PlayerType.Human,
+      "pinned",
+      "pinned",
+      false,
+      null,
+      [],
+      0,
+    );
+    const others = Array.from(
+      { length: 5 },
+      (_, index) =>
+        new PlayerInfo(
+          `Player ${index}`,
+          PlayerType.Human,
+          `p${index}`,
+          `p${index}`,
+        ),
+    );
+
+    const result = assignTeamsLobbyPreview([pinned, ...others], teams, 2, 0);
+
+    expect(result.get(pinned)).toBe(ColoredTeams.Red);
+    expect([...result.values()]).not.toContain("kicked");
   });
 });
 

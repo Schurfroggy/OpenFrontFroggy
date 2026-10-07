@@ -3,6 +3,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import { Difficulty, GameMapType } from "../../../core/game/Game";
 import { terrainMapFileLoader } from "../../TerrainMapFileLoader";
 import { translateText } from "../../Utils";
+import "../Difficulties";
 import { starIcon } from "./MapFavorites";
 import { MEDAL_ORDER, medalIcon } from "./Medals";
 
@@ -12,6 +13,7 @@ export class MapDisplay extends LitElement {
   @property({ type: Boolean }) selected = false;
   @property({ type: String }) translation: string = "";
   @property({ type: Boolean }) showMedals = false;
+  @property({ type: Boolean }) showDifficultyAchievement = false;
   @property({ type: Boolean }) favorite = false;
   @property({ attribute: false }) wins: Set<Difficulty> = new Set();
   @property({ attribute: false }) onToggleFavorite?: () => void;
@@ -154,6 +156,9 @@ export class MapDisplay extends LitElement {
                     : "opacity-80"} group-hover:opacity-100 transition-opacity duration-200"
                 />
                 ${this.renderFavoriteButton()}
+                ${this.showDifficultyAchievement
+                  ? this.renderDifficultyAchievement()
+                  : null}
               </div>`
             : html`<div
                 class="w-full aspect-[2/1] text-red-400 transition-transform duration-200 rounded-lg bg-red-500/10 text-xs font-bold uppercase tracking-wider flex items-center justify-center"
@@ -183,5 +188,22 @@ export class MapDisplay extends LitElement {
 
   private readWins(): Set<Difficulty> {
     return this.wins ?? new Set();
+  }
+
+  private renderDifficultyAchievement() {
+    const wins = this.readWins();
+    const highest = [...MEDAL_ORDER]
+      .reverse()
+      .find((difficulty) => wins.has(difficulty));
+    if (highest === undefined) return null;
+    return html`<div
+      class="absolute left-1.5 top-1.5 rounded-lg border border-red-400/30 bg-black/70 px-1.5 shadow-lg backdrop-blur-sm"
+      title=${translateText(`difficulty.${highest.toLowerCase()}`)}
+    >
+      <difficulty-display
+        .difficultyKey=${highest}
+        class="block"
+      ></difficulty-display>
+    </div>`;
   }
 }

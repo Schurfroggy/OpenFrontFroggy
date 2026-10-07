@@ -29,7 +29,8 @@ export interface NameVisibilityView {
   // Every client that ever joined, in join order — the order fixes each
   // player's anonymous-name slot.
   clients: () => ReadonlyMap<ClientID, Client>;
-  // The client's pinned matchmade team, or undefined outside one.
+  // The client's server-pinned team, or undefined when automatic assignment
+  // remains in effect.
   teamIndex: (client: Client) => number | undefined;
 }
 
@@ -86,7 +87,7 @@ export class NameVisibility {
       : simpleHash(`${this.view.gameID}:team:${team}`);
   }
 
-  // Teammates in a matchmade game. Anonymizing a player from their own team makes
+  // Teammates on a server-pinned team. Anonymizing a player from their own team makes
   // the team unplayable — you cannot coordinate with someone you cannot identify —
   // so a pinned team sees itself, exactly as a player already sees themselves.
   // Only PINNED teams: those are assigned server-side, so the server knows them

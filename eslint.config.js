@@ -32,6 +32,7 @@ export default [
           allowDefaultProject: [
             "__mocks__/fileMock.js",
             "eslint.config.js",
+            "scripts/resetSelfHostedPassword.mjs",
             "scripts/sync-assets.mjs",
             "tests/matchmaking/*.mjs",
           ],

@@ -1,6 +1,8 @@
 import { LitElement, html } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
+let nextSettingSelectId = 0;
+
 type SelectOption = {
   value: number | string;
   label: string;
@@ -8,6 +10,7 @@ type SelectOption = {
 
 @customElement("setting-select")
 export class SettingSelect extends LitElement {
+  private readonly inputId = `setting-select-input-${nextSettingSelectId++}`;
   @property() label = "Setting";
   @property() description = "";
   @property({ type: Array }) options: SelectOption[] = [];
@@ -47,7 +50,7 @@ export class SettingSelect extends LitElement {
         <div class="flex flex-col min-w-0">
           <label
             class="text-white font-bold text-base block mb-1"
-            for="setting-select-input"
+            for=${this.inputId}
             >${this.label}</label
           >
           <div class="text-white/50 text-sm leading-snug">
@@ -56,7 +59,7 @@ export class SettingSelect extends LitElement {
         </div>
         <div class="relative w-full">
           <select
-            id="setting-select-input"
+            id=${this.inputId}
             class="w-full appearance-none py-2 pl-3 pr-9 border border-white/20 rounded-lg bg-black/40 text-white font-mono text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             .value=${String(this.value)}
             ?disabled=${this.disabled}

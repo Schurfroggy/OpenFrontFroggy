@@ -5,6 +5,8 @@ import rateLimit from "express-rate-limit";
 import http from "http";
 import path from "path";
 import { fileURLToPath } from "url";
+import { z } from "zod";
+import { SelfHostedAchievementRecordSchema } from "../core/SelfHostedAchievements";
 import { GameEnv } from "../core/configuration/Config";
 import {
   applyCheckinState,
@@ -25,6 +27,11 @@ import { MasterLobbyService } from "./MasterLobbyService";
 import { setNoStoreHeaders } from "./NoStoreHeaders";
 import { startPolling } from "./PollingLoop";
 import { renderAppShell } from "./RenderHtml";
+import {
+  SelfHostedAccountStore,
+  selfHostedSessionMaxAgeSeconds,
+} from "./SelfHostedAccountStore";
+import { SelfHostedAchievementStore } from "./SelfHostedAchievementStore";
 import { ServerEnv } from "./ServerEnv";
 import { applyStaticAssetCacheControl } from "./StaticAssetCache";
 
@@ -35,6 +42,79 @@ const app = express();
 const server = http.createServer(app);
 
 const log = logger.child({ comp: "m" });
+let selfHostedAchievementStore: SelfHostedAchievementStore | null = null;
+let selfHostedAccountStore: SelfHostedAccountStore | null = null;
+
+function achievementStore(): SelfHostedAchievementStore {
+  selfHostedAchievementStore ??= new SelfHostedAchievementStore();
+  return selfHostedAchievementStore;
+}
+
+function accountStore(): SelfHostedAccountStore {
+  selfHostedAccountStore ??= new SelfHostedAccountStore();
+  return selfHostedAccountStore;
+}
+
+const SELF_HOSTED_SESSION_COOKIE = "openfront_self_hosted_session";
+const accountCredentialsSchema = z.object({
+  username: z.string().trim().min(3).max(20),
+  password: z.string().min(8).max(128),
+});
+const accountRenameSchema = z.object({
+  username: z.string().trim().min(3).max(20),
+});
+const passwordChangeSchema = z.object({
+  currentPassword: z.string().min(8).max(128),
+  newPassword: z.string().min(8).max(128),
+});
+const passwordResetRequestSchema = z.object({
+  username: z.string().trim().min(3).max(20),
+});
+const passwordResetCredentialSchema = z.object({
+  requestId: z.uuid(),
+  recoveryToken: z.string().min(32).max(128),
+});
+const passwordResetCompleteSchema = passwordResetCredentialSchema.extend({
+  newPassword: z.string().min(8).max(128),
+});
+const passwordResetReviewSchema = z.object({
+  decision: z.enum(["approved", "rejected"]),
+});
+
+function cookieValue(cookieHeader: string | undefined, name: string) {
+  for (const part of cookieHeader?.split(";") ?? []) {
+    const [key, ...value] = part.trim().split("=");
+    if (key === name) return decodeURIComponent(value.join("="));
+  }
+  return undefined;
+}
+
+function sessionToken(req: express.Request): string | undefined {
+  return cookieValue(req.headers.cookie, SELF_HOSTED_SESSION_COOKIE);
+}
+
+function setSessionCookie(res: express.Response, token: string): void {
+  res.setHeader(
+    "Set-Cookie",
+    `${SELF_HOSTED_SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${selfHostedSessionMaxAgeSeconds}`,
+  );
+}
+
+function clearSessionCookie(res: express.Response): void {
+  res.setHeader(
+    "Set-Cookie",
+    `${SELF_HOSTED_SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`,
+  );
+}
+
+function requireSelfHostedAdmin(req: express.Request, res: express.Response) {
+  const account = accountStore().accountForSession(sessionToken(req));
+  if (!account || account.role !== "admin") {
+    res.status(403).json({ error: "forbidden" });
+    return null;
+  }
+  return account;
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -149,6 +229,201 @@ app.get(
 app.use("/api", (_req, res, next) => {
   setNoStoreHeaders(res);
   next();
+});
+
+app.post("/api/self-hosted/account/register", (req, res) => {
+  if (!ServerEnv.selfHosted())
+    return res.status(404).json({ error: "not_found" });
+  const parsed = accountCredentialsSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_input" });
+  try {
+    const result = accountStore().register(
+      parsed.data.username,
+      parsed.data.password,
+    );
+    setSessionCookie(res, result.sessionToken);
+    return res.status(201).json({ account: result.account });
+  } catch (error) {
+    if (error instanceof Error && error.message === "username_taken") {
+      return res.status(409).json({ error: "username_taken" });
+    }
+    throw error;
+  }
+});
+
+app.post("/api/self-hosted/account/login", (req, res) => {
+  if (!ServerEnv.selfHosted())
+    return res.status(404).json({ error: "not_found" });
+  const parsed = accountCredentialsSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_input" });
+  const result = accountStore().login(
+    parsed.data.username,
+    parsed.data.password,
+  );
+  if (!result) return res.status(401).json({ error: "invalid_credentials" });
+  setSessionCookie(res, result.sessionToken);
+  return res.json({ account: result.account });
+});
+
+app.post("/api/self-hosted/account/logout", (req, res) => {
+  if (!ServerEnv.selfHosted())
+    return res.status(404).json({ error: "not_found" });
+  accountStore().deleteSession(sessionToken(req));
+  clearSessionCookie(res);
+  return res.status(204).end();
+});
+
+app.get("/api/self-hosted/account/me", (req, res) => {
+  if (!ServerEnv.selfHosted())
+    return res.status(404).json({ error: "not_found" });
+  return res.json({
+    account: accountStore().accountForSession(sessionToken(req)),
+  });
+});
+
+app.get("/api/self-hosted/account/play-token", (req, res) => {
+  if (!ServerEnv.selfHosted())
+    return res.status(404).json({ error: "not_found" });
+  const account = accountStore().accountForSession(sessionToken(req));
+  if (!account) return res.status(401).json({ error: "guest" });
+  return res.json({ token: account.id });
+});
+
+app.patch("/api/self-hosted/account/profile", (req, res) => {
+  if (!ServerEnv.selfHosted())
+    return res.status(404).json({ error: "not_found" });
+  const account = accountStore().accountForSession(sessionToken(req));
+  if (!account) return res.status(401).json({ error: "guest" });
+  const parsed = accountRenameSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_input" });
+  try {
+    return res.json({
+      account: accountStore().rename(account.id, parsed.data.username),
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "username_taken") {
+      return res.status(409).json({ error: "username_taken" });
+    }
+    throw error;
+  }
+});
+
+app.patch("/api/self-hosted/account/password", (req, res) => {
+  if (!ServerEnv.selfHosted())
+    return res.status(404).json({ error: "not_found" });
+  const account = accountStore().accountForSession(sessionToken(req));
+  if (!account) return res.status(401).json({ error: "guest" });
+  const parsed = passwordChangeSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_input" });
+  if (
+    !accountStore().changePassword(
+      account.id,
+      parsed.data.currentPassword,
+      parsed.data.newPassword,
+    )
+  ) {
+    return res.status(401).json({ error: "invalid_credentials" });
+  }
+  clearSessionCookie(res);
+  return res.status(204).end();
+});
+
+app.post("/api/self-hosted/password-reset/request", (req, res) => {
+  if (!ServerEnv.selfHosted())
+    return res.status(404).json({ error: "not_found" });
+  const parsed = passwordResetRequestSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_input" });
+  const request = accountStore().requestPasswordReset(parsed.data.username);
+  if (!request) return res.status(404).json({ error: "account_not_found" });
+  return res.status(201).json(request);
+});
+
+app.post("/api/self-hosted/password-reset/status", (req, res) => {
+  if (!ServerEnv.selfHosted())
+    return res.status(404).json({ error: "not_found" });
+  const parsed = passwordResetCredentialSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_input" });
+  const reset = accountStore().passwordResetStatus(
+    parsed.data.requestId,
+    parsed.data.recoveryToken,
+  );
+  if (!reset) return res.status(404).json({ error: "reset_not_found" });
+  return res.json({ reset });
+});
+
+app.post("/api/self-hosted/password-reset/complete", (req, res) => {
+  if (!ServerEnv.selfHosted())
+    return res.status(404).json({ error: "not_found" });
+  const parsed = passwordResetCompleteSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_input" });
+  const result = accountStore().completePasswordReset(
+    parsed.data.requestId,
+    parsed.data.recoveryToken,
+    parsed.data.newPassword,
+  );
+  if (!result) return res.status(409).json({ error: "reset_not_available" });
+  setSessionCookie(res, result.sessionToken);
+  return res.json({ account: result.account });
+});
+
+app.get("/api/self-hosted/admin/overview", (req, res) => {
+  if (!ServerEnv.selfHosted())
+    return res.status(404).json({ error: "not_found" });
+  if (!requireSelfHostedAdmin(req, res)) return;
+  return res.json(accountStore().adminOverview());
+});
+
+app.patch("/api/self-hosted/admin/password-resets/:requestId", (req, res) => {
+  if (!ServerEnv.selfHosted())
+    return res.status(404).json({ error: "not_found" });
+  const admin = requireSelfHostedAdmin(req, res);
+  if (!admin) return;
+  const requestId = z.uuid().safeParse(req.params.requestId);
+  const body = passwordResetReviewSchema.safeParse(req.body);
+  if (!requestId.success || !body.success) {
+    return res.status(400).json({ error: "invalid_input" });
+  }
+  const changed = accountStore().reviewPasswordReset(
+    requestId.data,
+    admin.id,
+    body.data.decision,
+  );
+  if (!changed) return res.status(409).json({ error: "reset_not_available" });
+  return res.status(204).end();
+});
+
+app.get("/api/self-hosted/achievements", (req, res) => {
+  if (!ServerEnv.selfHosted()) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  const account = accountStore().accountForSession(sessionToken(req));
+  res.json({
+    achievements: account ? achievementStore().list(account.id) : [],
+  });
+});
+
+app.post("/api/self-hosted/achievements", (req, res) => {
+  if (!ServerEnv.selfHosted()) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  const account = accountStore().accountForSession(sessionToken(req));
+  if (!account) {
+    res.status(401).json({ error: "Guests cannot earn achievements" });
+    return;
+  }
+  const parsed = SelfHostedAchievementRecordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: z.prettifyError(parsed.error) });
+    return;
+  }
+  achievementStore().record({
+    ...parsed.data,
+    playerId: account.id,
+    playerName: account.username,
+  });
+  res.status(204).end();
 });
 
 // Start the master process

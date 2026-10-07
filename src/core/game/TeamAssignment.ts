@@ -21,10 +21,9 @@ export function assignTeams(
   const result = new Map<PlayerInfo, Team | "kicked">();
   const teamPlayerCount = new Map<Team, number>();
 
-  // Matchmade games arrive with a server-pinned team slot (teamIndex). The
-  // matchmaker already balanced those teams, so pins are honored
-  // unconditionally — before and regardless of clan/friend grouping and
-  // maxTeamSize — and seed the counts the balancing below sees.
+  // Matchmaking and private-lobby choices arrive as a server-pinned team slot
+  // (teamIndex). Pins are honored before clan/friend grouping and seed the
+  // counts the balancing below sees.
   const unpinned: PlayerInfo[] = [];
   for (const p of players) {
     const pinnedTeam = p.teamIndex === null ? undefined : teams[p.teamIndex];
@@ -166,10 +165,11 @@ export function assignTeamsLobbyPreview(
   teamCount: TeamCountConfig,
   nationCount: number,
 ): Map<PlayerInfo, Team | "kicked"> {
-  const maxTeamSize = getMaxTeamSize(
-    players.length + nationCount,
-    teams.length,
-  );
+  const hasPinnedPlayers = players.some((player) => player.teamIndex !== null);
+  const maxTeamSize =
+    hasPinnedPlayers && typeof teamCount === "number"
+      ? Infinity
+      : getMaxTeamSize(players.length + nationCount, teams.length);
   return assignTeams(
     players,
     teams,

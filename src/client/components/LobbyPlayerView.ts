@@ -14,7 +14,12 @@ import {
 } from "../../core/game/Game";
 import { assignTeamsLobbyPreview } from "../../core/game/TeamAssignment";
 import { UserSettings } from "../../core/game/UserSettings";
-import { ClientID, ClientInfo, TeamCountConfig } from "../../core/Schemas";
+import {
+  ClientID,
+  ClientInfo,
+  TeamAssignmentPreset,
+  TeamCountConfig,
+} from "../../core/Schemas";
 import { createRandomName, formatPlayerDisplayName } from "../../core/Util";
 import { Theme, themeProvider } from "../theme/ThemeProvider";
 import {
@@ -44,11 +49,33 @@ export class LobbyTeamView extends LitElement {
   @property({ type: Boolean }) anonymizeNames: boolean = false;
   @property({ type: Number }) nationCount: number = 0;
   @property({ type: Boolean }) isPublicGame: boolean = false;
+  @property({ type: Boolean }) canManageAllTeams: boolean = false;
+  @property({ type: Boolean }) allowPlayerTeamSelection: boolean = false;
+  @property({ type: Boolean }) teamEditingLocked: boolean = false;
+  @property({ type: Function }) onAssignPlayerTeam?: (
+    clientID: ClientID,
+    teamIndex: number | null,
+  ) => void;
+  @property({ type: Function }) onApplyTeamPreset?: (
+    preset: TeamAssignmentPreset,
+  ) => void;
+  @property({ type: Function }) onAllowPlayerTeamSelectionChanged?: (
+    allowed: boolean,
+  ) => void;
 
   private get theme(): Theme {
     return themeProvider.current();
   }
   @state() private showTeamColors: boolean = false;
+  @state() private teamMenuClientID: ClientID | null = null;
+  @state() private dragOverTeamIndex: number | null = null;
+  // dataTransfer can be cleared when Lit re-renders a team card during
+  // dragover. Retain the controlled player explicitly for the whole gesture.
+  private draggingClientID: ClientID | null = null;
+  private longPressTimer: number | null = null;
+  private longPressClientID: ClientID | null = null;
+  private longPressActive = false;
+  private longPressStart = { x: 0, y: 0 };
   private _clanUpdateTimeout: number | null = null;
   private _teamClanTags: Map<Team, string | null> = new Map();
   private _viewerFriends: ReadonlySet<ClientID> = new Set();
@@ -107,6 +134,7 @@ export class LobbyTeamView extends LitElement {
       window.clearTimeout(this._clanUpdateTimeout);
       this._clanUpdateTimeout = null;
     }
+    this.clearLongPress();
   }
 
   render() {
@@ -191,61 +219,108 @@ export class LobbyTeamView extends LitElement {
     const empty = this.teamPreview.filter(
       (t) => t.players.length === 0 && t.team !== ColoredTeams.Nations,
     );
-    return html` <div
-      class="flex flex-col md:flex-row gap-3 md:gap-4 items-stretch"
-    >
-      <div
-        class="w-full md:w-60 bg-gray-800 p-2 border border-gray-700 rounded-lg"
-      >
-        <div class="font-bold mb-1.5 text-gray-300 text-sm">
-          ${translateText("host_modal.players")}
-        </div>
-        ${repeat(
-          this.activePlayers,
-          (c) => c.clientID ?? c.username,
-          (client) => {
-            const displayName = this.getClientDisplayName(client);
-            return html`<div
-              class="px-2 py-1 rounded-sm mb-1 text-xs text-white border break-words
+    return html`
+      <div class="flex flex-col md:flex-row gap-3 md:gap-4 items-stretch">
+        <div
+          class="w-full md:w-60 bg-gray-800 p-2 border border-gray-700 rounded-lg"
+        >
+          <div class="font-bold mb-1.5 text-gray-300 text-sm">
+            ${translateText("host_modal.players")}
+          </div>
+          ${repeat(
+            this.activePlayers,
+            (c) => c.clientID ?? c.username,
+            (client) => {
+              const displayName = this.getClientDisplayName(client);
+              return html`<div
+                class="px-2 py-1 rounded-sm mb-1 text-xs text-white border break-words
                 ${this.isCurrentPlayer(client)
-                ? "bg-malibu-blue/20 border-sky-500/40"
-                : "bg-gray-700/70 border-transparent"}"
+                  ? "bg-malibu-blue/20 border-sky-500/40"
+                  : "bg-gray-700/70 border-transparent"}"
+              >
+                ${displayName} ${this.renderVerifiedBadge(client)}
+                ${this.renderFriendBadge(client)}
+              </div>`;
+            },
+          )}
+        </div>
+        <div class="flex-1 flex flex-col gap-3 md:gap-4 md:pr-1">
+          <div>
+            <div class="font-semibold text-gray-200 mb-1 text-sm">
+              ${translateText("host_modal.assigned_teams")}
+            </div>
+            <div class="w-full grid grid-cols-1 sm:grid-cols-2 gap-2 md:gap-3">
+              ${repeat(
+                active,
+                (p) => p.team,
+                (preview) => this.renderTeamCard(preview, false),
+              )}
+            </div>
+          </div>
+          <div>
+            ${empty.length > 0
+              ? html`<div class="font-semibold text-gray-200 mb-1 text-sm">
+                  ${translateText("host_modal.empty_teams")}
+                </div>`
+              : ""}
+            <div class="w-full grid grid-cols-1 sm:grid-cols-2 gap-2 md:gap-3">
+              ${repeat(
+                empty,
+                (p) => p.team,
+                (preview) => this.renderTeamCard(preview, true),
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+      ${this.renderTeamControls()}
+    `;
+  }
+
+  private renderTeamControls() {
+    if (this.teamCount === HumansVsNations) return html``;
+    const hostControls = this.onApplyTeamPreset !== undefined;
+    if (!hostControls && !this.allowPlayerTeamSelection) return html``;
+    return html`
+      <div class="mt-3 border-t border-white/10 pt-3 flex flex-col gap-2">
+        ${this.onAllowPlayerTeamSelectionChanged
+          ? html`<label
+              class="flex items-center gap-2 text-xs text-gray-200 cursor-pointer"
             >
-              ${displayName} ${this.renderVerifiedBadge(client)}
-              ${this.renderFriendBadge(client)}
-            </div>`;
-          },
-        )}
+              <input
+                type="checkbox"
+                .checked=${this.allowPlayerTeamSelection}
+                ?disabled=${this.teamEditingLocked}
+                @change=${(event: Event) =>
+                  this.onAllowPlayerTeamSelectionChanged?.(
+                    (event.target as HTMLInputElement).checked,
+                  )}
+              />
+              ${translateText("host_modal.allow_player_team_selection")}
+            </label>`
+          : html`<div class="text-[11px] text-sky-300">
+              ${translateText("host_modal.choose_own_team_hint")}
+            </div>`}
+        ${hostControls
+          ? html`<div class="flex flex-wrap gap-2">
+              <button
+                class="px-3 py-1.5 rounded-md bg-sky-700 hover:bg-sky-600 disabled:opacity-40 text-xs font-semibold text-white"
+                ?disabled=${this.teamEditingLocked}
+                @click=${() => this.onApplyTeamPreset?.("balanced")}
+              >
+                ${translateText("host_modal.auto_balance_teams")}
+              </button>
+              <button
+                class="px-3 py-1.5 rounded-md bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 text-xs font-semibold text-white"
+                ?disabled=${this.teamEditingLocked}
+                @click=${() => this.onApplyTeamPreset?.("humans_together")}
+              >
+                ${translateText("host_modal.humans_together")}
+              </button>
+            </div>`
+          : html``}
       </div>
-      <div class="flex-1 flex flex-col gap-3 md:gap-4 md:pr-1">
-        <div>
-          <div class="font-semibold text-gray-200 mb-1 text-sm">
-            ${translateText("host_modal.assigned_teams")}
-          </div>
-          <div class="w-full grid grid-cols-1 sm:grid-cols-2 gap-2 md:gap-3">
-            ${repeat(
-              active,
-              (p) => p.team,
-              (preview) => this.renderTeamCard(preview, false),
-            )}
-          </div>
-        </div>
-        <div>
-          ${empty.length > 0
-            ? html`<div class="font-semibold text-gray-200 mb-1 text-sm">
-                ${translateText("host_modal.empty_teams")}
-              </div>`
-            : ""}
-          <div class="w-full grid grid-cols-1 sm:grid-cols-2 gap-2 md:gap-3">
-            ${repeat(
-              empty,
-              (p) => p.team,
-              (preview) => this.renderTeamCard(preview, true),
-            )}
-          </div>
-        </div>
-      </div>
-    </div>`;
+    `;
   }
 
   // Host-only per-player toggle for who may see real names under anonymizeNames.
@@ -310,6 +385,9 @@ export class LobbyTeamView extends LitElement {
   }
 
   private renderTeamCard(preview: TeamPreviewData, isEmpty: boolean = false) {
+    const teamIndex = this.teamPreview.findIndex(
+      (p) => p.team === preview.team,
+    );
     const displayCount =
       preview.team === ColoredTeams.Nations
         ? this.effectiveNationCount
@@ -325,7 +403,19 @@ export class LobbyTeamView extends LitElement {
 
     return html`
       <div
-        class="bg-gray-800 border rounded-xl flex flex-col
+        data-team-index=${teamIndex}
+        @dragover=${(event: DragEvent) => {
+          if (this.teamEditingLocked) return;
+          event.preventDefault();
+          this.dragOverTeamIndex = teamIndex;
+        }}
+        @dragleave=${() => {
+          if (this.dragOverTeamIndex === teamIndex)
+            this.dragOverTeamIndex = null;
+        }}
+        @drop=${(event: DragEvent) => this.dropPlayerOnTeam(event, teamIndex)}
+        class="bg-gray-800 border rounded-xl flex flex-col transition-colors
+          ${this.dragOverTeamIndex === teamIndex ? "ring-2 ring-sky-400" : ""}
           ${this.teamContainsCurrentPlayer(preview)
           ? "border-sky-500/60"
           : "border-gray-700"}"
@@ -356,8 +446,23 @@ export class LobbyTeamView extends LitElement {
                 (p) => p.clientID ?? p.username,
                 (p) => {
                   const displayName = this.getClientDisplayName(p);
+                  const canControl = this.canControlPlayer(p);
                   return html` <div
-                    class="px-2 py-1 rounded-sm text-xs flex items-center justify-between border
+                    .draggable=${canControl}
+                    @dragstart=${(event: DragEvent) =>
+                      this.startPlayerDrag(event, p)}
+                    @dragend=${() => this.finishPlayerDrag()}
+                    @contextmenu=${(event: MouseEvent) =>
+                      this.openTeamMenu(event, p)}
+                    @pointerdown=${(event: PointerEvent) =>
+                      this.startLongPress(event, p)}
+                    @pointermove=${(event: PointerEvent) =>
+                      this.moveLongPress(event)}
+                    @pointerup=${(event: PointerEvent) =>
+                      this.finishLongPress(event)}
+                    @pointercancel=${() => this.clearLongPress()}
+                    class="relative px-2 py-1 rounded-sm text-xs flex items-center justify-between border
+                      ${canControl ? "cursor-grab select-none" : ""}
                       ${this.isCurrentPlayer(p)
                       ? "bg-malibu-blue/20 border-sky-500/40"
                       : "bg-gray-700/70 border-transparent"}"
@@ -368,6 +473,16 @@ export class LobbyTeamView extends LitElement {
                       ${this.renderFriendBadge(p)}
                     </span>
                     ${this.renderRevealToggle(p.clientID)}
+                    ${canControl
+                      ? html`<button
+                          class="ml-1 px-1 text-white/60 hover:text-white"
+                          title=${translateText("host_modal.move_player_team")}
+                          @click=${(event: MouseEvent) =>
+                            this.openTeamMenu(event, p)}
+                        >
+                          ⋯
+                        </button>`
+                      : html``}
                     ${p.clientID === this.lobbyCreatorClientID
                       ? html`<span class="ml-2 text-[11px] text-green-300"
                           >(${translateText("host_modal.host_badge")})</span
@@ -396,12 +511,160 @@ export class LobbyTeamView extends LitElement {
                             </svg>
                           </button>`
                         : html``}
+                    ${this.teamMenuClientID === p.clientID
+                      ? this.renderTeamMenu(p)
+                      : html``}
                   </div>`;
                 },
               )}
         </div>
       </div>
     `;
+  }
+
+  private canControlPlayer(client: ClientInfo): boolean {
+    if (
+      this.teamCount === HumansVsNations ||
+      this.teamEditingLocked ||
+      this.onAssignPlayerTeam === undefined
+    ) {
+      return false;
+    }
+    return (
+      this.canManageAllTeams ||
+      (this.allowPlayerTeamSelection && this.isCurrentPlayer(client))
+    );
+  }
+
+  private openTeamMenu(event: Event, client: ClientInfo) {
+    if (!this.canControlPlayer(client)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.teamMenuClientID =
+      this.teamMenuClientID === client.clientID ? null : client.clientID;
+  }
+
+  private renderTeamMenu(client: ClientInfo) {
+    return html`<div
+      class="absolute right-1 top-full z-30 mt-1 min-w-36 rounded-md border border-white/20 bg-gray-950 p-1 shadow-xl"
+    >
+      ${this.getTeamList().map(
+        (team, teamIndex) =>
+          html`<button
+            class="block w-full rounded px-2 py-1.5 text-left text-xs text-white hover:bg-white/10"
+            @click=${(event: MouseEvent) => {
+              event.stopPropagation();
+              this.assignPlayer(client.clientID, teamIndex);
+            }}
+          >
+            ${getTranslatedPlayerTeamLabel(
+              team,
+              this._teamClanTags.get(team) ?? null,
+            )}
+          </button>`,
+      )}
+      <button
+        class="block w-full rounded px-2 py-1.5 text-left text-xs text-gray-300 hover:bg-white/10"
+        @click=${(event: MouseEvent) => {
+          event.stopPropagation();
+          this.assignPlayer(client.clientID, null);
+        }}
+      >
+        ${translateText("host_modal.automatic_team_assignment")}
+      </button>
+    </div>`;
+  }
+
+  private assignPlayer(clientID: ClientID, teamIndex: number | null) {
+    this.teamMenuClientID = null;
+    this.dragOverTeamIndex = null;
+    this.onAssignPlayerTeam?.(clientID, teamIndex);
+  }
+
+  private startPlayerDrag(event: DragEvent, client: ClientInfo) {
+    if (!this.canControlPlayer(client)) {
+      event.preventDefault();
+      return;
+    }
+    this.draggingClientID = client.clientID;
+    event.dataTransfer?.setData("text/plain", client.clientID);
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+  }
+
+  private dropPlayerOnTeam(event: DragEvent, teamIndex: number) {
+    event.preventDefault();
+    const clientID =
+      this.draggingClientID ?? event.dataTransfer?.getData("text/plain") ?? "";
+    const client = this.activePlayers.find((p) => p.clientID === clientID);
+    if (client && this.canControlPlayer(client)) {
+      this.assignPlayer(client.clientID, teamIndex);
+    }
+    this.finishPlayerDrag();
+  }
+
+  private finishPlayerDrag() {
+    this.draggingClientID = null;
+    this.dragOverTeamIndex = null;
+  }
+
+  private startLongPress(event: PointerEvent, client: ClientInfo) {
+    if (event.pointerType === "mouse" || !this.canControlPlayer(client)) return;
+    this.clearLongPress();
+    this.longPressClientID = client.clientID;
+    this.longPressStart = { x: event.clientX, y: event.clientY };
+    this.longPressTimer = window.setTimeout(() => {
+      this.longPressTimer = null;
+      this.longPressActive = true;
+    }, 350);
+  }
+
+  private moveLongPress(event: PointerEvent) {
+    if (this.longPressClientID === null) return;
+    if (!this.longPressActive) {
+      if (
+        Math.hypot(
+          event.clientX - this.longPressStart.x,
+          event.clientY - this.longPressStart.y,
+        ) > 8
+      ) {
+        this.clearLongPress();
+      }
+      return;
+    }
+    event.preventDefault();
+    this.dragOverTeamIndex = this.teamIndexAtPoint(
+      event.clientX,
+      event.clientY,
+    );
+  }
+
+  private finishLongPress(event: PointerEvent) {
+    const clientID = this.longPressClientID;
+    if (clientID !== null && this.longPressActive) {
+      event.preventDefault();
+      const teamIndex = this.teamIndexAtPoint(event.clientX, event.clientY);
+      const client = this.activePlayers.find((p) => p.clientID === clientID);
+      if (teamIndex !== null && client && this.canControlPlayer(client)) {
+        this.assignPlayer(clientID, teamIndex);
+      }
+    }
+    this.clearLongPress();
+  }
+
+  private teamIndexAtPoint(x: number, y: number): number | null {
+    const element = document.elementFromPoint(x, y) as HTMLElement | null;
+    const card = element?.closest<HTMLElement>("[data-team-index]");
+    if (!card) return null;
+    const value = Number(card.dataset.teamIndex);
+    return Number.isInteger(value) ? value : null;
+  }
+
+  private clearLongPress() {
+    if (this.longPressTimer !== null) window.clearTimeout(this.longPressTimer);
+    this.longPressTimer = null;
+    this.longPressClientID = null;
+    this.longPressActive = false;
+    this.dragOverTeamIndex = null;
   }
 
   private getTeamList(): Team[] {

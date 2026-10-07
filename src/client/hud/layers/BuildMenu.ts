@@ -432,12 +432,7 @@ export class BuildMenu extends LitElement implements Controller {
                       ? translateText("build_menu.not_enough_money")
                       : ""}
                   >
-                    <img
-                      src=${item.icon}
-                      alt="${item.unitType}"
-                      width="40"
-                      height="40"
-                    />
+                    <img src=${item.icon} alt="" width="40" height="40" />
                     <span class="build-name">
                       ${item.key && translateText(item.key)}
                     </span>
@@ -451,7 +446,7 @@ export class BuildMenu extends LitElement implements Controller {
                       )}
                       <img
                         src=${goldCoinIcon}
-                        alt="gold"
+                        alt=${translateText("build_menu.gold")}
                         width="12"
                         height="12"
                         class="align-middle"

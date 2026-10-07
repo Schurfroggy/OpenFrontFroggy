@@ -8,12 +8,39 @@ import {
 describe("webgl-gate", () => {
   let gate: WebGLGate | undefined;
 
+  function flatten(
+    value: Record<string, unknown>,
+    prefix = "",
+    result: Record<string, string> = {},
+  ): Record<string, string> {
+    for (const [key, child] of Object.entries(value)) {
+      const fullKey = prefix ? `${prefix}.${key}` : key;
+      if (typeof child === "string") {
+        result[fullKey] = child;
+      } else if (child && typeof child === "object" && !Array.isArray(child)) {
+        flatten(child as Record<string, unknown>, fullKey, result);
+      }
+    }
+    return result;
+  }
+
   afterEach(() => {
     gate?.remove();
     window.openfrontDesktop = undefined;
   });
 
   async function mount(status: WebGLGateStatus): Promise<WebGLGate> {
+    const translations = flatten(en);
+    const selector = document.createElement("lang-selector") as HTMLElement & {
+      currentLang: string;
+      translations: Record<string, string>;
+      defaultTranslations: Record<string, string>;
+    };
+    selector.currentLang = "en";
+    selector.translations = translations;
+    selector.defaultTranslations = translations;
+    document.body.appendChild(selector);
+
     gate = new WebGLGate();
     gate.status = status;
     document.body.appendChild(gate);
@@ -35,7 +62,7 @@ describe("webgl-gate", () => {
       await mount(status);
 
       expect(gate!.textContent).toContain(
-        "desktop_webgl_gate.step_restart_steam",
+        en.desktop_webgl_gate.step_restart_steam,
       );
       expect(gate!.textContent).not.toContain("chrome://flags");
       expect(gate!.textContent).not.toContain("Safari");
@@ -48,23 +75,27 @@ describe("webgl-gate", () => {
     await mount("unsupported");
 
     const button = gate!.querySelector("button");
-    expect(button?.textContent?.trim()).toBe("desktop_webgl_gate.quit");
+    expect(button?.textContent?.trim()).toBe(en.desktop_webgl_gate.quit);
     button!.click();
     expect(quit).toHaveBeenCalledOnce();
   });
 
-  it("has an en.json entry for every string on the desktop gate", async () => {
+  it("renders every desktop-gate string from en.json", async () => {
     window.openfrontDesktop = { quit: () => Promise.resolve() };
     await mount("unsupported");
 
     const keys = [...gate!.querySelectorAll("h2, p, li, button")].map((el) =>
       el.textContent!.trim(),
     );
-    expect(keys).toHaveLength(7);
-    for (const key of keys) {
-      const leaf = key.slice("desktop_webgl_gate.".length);
-      expect(en.desktop_webgl_gate).toHaveProperty(leaf);
-    }
+    expect(keys).toEqual([
+      en.desktop_webgl_gate.title,
+      en.desktop_webgl_gate.intro,
+      en.desktop_webgl_gate.step_quit,
+      en.desktop_webgl_gate.step_restart_steam,
+      en.desktop_webgl_gate.step_restart_computer,
+      en.desktop_webgl_gate.step_drivers,
+      en.desktop_webgl_gate.quit,
+    ]);
   });
 
   it("omits the quit button on a shell without quit()", async () => {

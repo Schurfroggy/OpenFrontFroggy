@@ -216,6 +216,7 @@ export default defineConfig(({ mode }) => {
     assetManifest: JSON.stringify(assetManifest),
     cdnBase: JSON.stringify(cdnBase),
     gameEnv: JSON.stringify(env.GAME_ENV ?? "dev"),
+    selfHosted: JSON.stringify(env.SELF_HOSTED === "true"),
     cluster: devClusterJson,
     instanceLetter: JSON.stringify(devInstanceLetter),
     turnstileSiteKey: JSON.stringify(
@@ -427,6 +428,11 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 9000,
       host: process.env.VITE_HOST === "lan",
+      // Self-hosted friends servers commonly sit behind rotating FRP/TCP
+      // endpoints, so their public Host cannot be known in advance. Keep the
+      // normal development server on Vite's default host checks, and accept
+      // arbitrary tunnel hosts only for `npm run self-host`.
+      allowedHosts: process.env.SELF_HOSTED === "true" ? true : [],
       // Automatically open the browser when the server starts
       open: process.env.SKIP_BROWSER_OPEN !== "true",
       proxy: {

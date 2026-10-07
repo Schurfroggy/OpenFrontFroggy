@@ -35,7 +35,9 @@ export class MapPicker extends LitElement {
   @property({ type: String }) selectedMap: GameMapType = GameMapType.World;
   @property({ type: Boolean }) useRandomMap = false;
   @property({ type: Boolean }) showMedals = false;
+  @property({ type: Boolean }) showDifficultyAchievements = false;
   @property({ type: Boolean }) randomMapDivider = false;
+  @property({ type: Boolean }) locked = false;
   @property({ type: String }) searchQuery = "";
   @property({ attribute: false }) mapWins: Map<GameMapType, Set<Difficulty>> =
     new Map();
@@ -103,13 +105,17 @@ export class MapPicker extends LitElement {
   private renderMapCard(map: MapInfo) {
     return html`
       <div
-        @click=${() => this.handleMapSelection(map.type)}
-        class="cursor-pointer"
+        @click=${this.locked
+          ? undefined
+          : () => this.handleMapSelection(map.type)}
+        aria-disabled=${this.locked}
+        class=${this.locked ? "cursor-not-allowed" : "cursor-pointer"}
       >
         <map-display
           .mapKey=${map.id}
           .selected=${!this.useRandomMap && this.selectedMap === map.type}
           .showMedals=${this.showMedals}
+          .showDifficultyAchievement=${this.showDifficultyAchievements}
           .wins=${this.getWins(map.type)}
           .favorite=${this.favorites.includes(map.type)}
           .onToggleFavorite=${() => this.handleToggleFavorite(map.type)}
@@ -310,6 +316,12 @@ export class MapPicker extends LitElement {
   }
 
   render() {
+    if (this.locked) {
+      const selected = maps.find((map) => map.type === this.selectedMap);
+      return selected
+        ? html`<div class="max-w-xs">${this.renderMapCard(selected)}</div>`
+        : html``;
+    }
     const isSearching = this.searchQuery.trim().length > 0;
     return html`
       <div class="space-y-8">

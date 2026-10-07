@@ -554,7 +554,7 @@ export class HelpModal extends BaseModal {
                   >
                   <img
                     src=${assetUrl("images/helpModal/leaderboard2.webp")}
-                    alt="Leaderboard"
+                    alt=${translateText("help_modal.ui_leaderboard")}
                     class="rounded-lg shadow-lg border border-white/20 max-w-[200px]"
                     loading="lazy"
                   />
@@ -577,7 +577,7 @@ export class HelpModal extends BaseModal {
                   >
                   <img
                     src=${assetUrl("images/helpModal/controlPanel.webp")}
-                    alt="Control Panel"
+                    alt=${translateText("help_modal.ui_control")}
                     class="rounded-lg shadow-lg border border-white/20 max-w-[200px]"
                     loading="lazy"
                   />
@@ -605,13 +605,13 @@ export class HelpModal extends BaseModal {
                   <div class="flex flex-col gap-2">
                     <img
                       src=${assetUrl("images/helpModal/eventsPanel.webp")}
-                      alt="Events"
+                      alt=${translateText("help_modal.ui_events")}
                       class="rounded-lg shadow-lg border border-white/20 max-w-[200px]"
                       loading="lazy"
                     />
                     <img
                       src=${assetUrl("images/helpModal/eventsPanelAttack.webp")}
-                      alt="Events Attack"
+                      alt=${translateText("help_modal.ui_events")}
                       class="rounded-lg shadow-lg border border-white/20 max-w-[200px]"
                       loading="lazy"
                     />
@@ -640,7 +640,7 @@ export class HelpModal extends BaseModal {
                   >
                   <img
                     src=${assetUrl("images/helpModal/options2.webp")}
-                    alt="Options"
+                    alt=${translateText("help_modal.ui_options")}
                     class="rounded-lg shadow-lg border border-white/20 max-w-[200px]"
                     loading="lazy"
                   />
@@ -670,7 +670,7 @@ export class HelpModal extends BaseModal {
                   >
                   <img
                     src=${assetUrl("images/helpModal/playerInfoOverlay.webp")}
-                    alt="Player Info"
+                    alt=${translateText("help_modal.ui_playeroverlay")}
                     class="rounded-lg shadow-lg border border-white/20 max-w-[200px]"
                     loading="lazy"
                   />
@@ -719,13 +719,13 @@ export class HelpModal extends BaseModal {
               <div class="flex flex-col gap-4 shrink-0">
                 <img
                   src=${assetUrl("images/helpModal/radialMenu2.webp")}
-                  alt="Radial Menu"
+                  alt=${translateText("help_modal.radial_title")}
                   class="rounded-lg shadow-lg border border-white/20 max-w-[200px]"
                   loading="lazy"
                 />
                 <img
                   src=${assetUrl("images/helpModal/radialMenuAlly.webp")}
-                  alt="Radial Menu Ally"
+                  alt=${translateText("help_modal.info_ally_panel")}
                   class="rounded-lg shadow-lg border border-white/20 max-w-[200px]"
                   loading="lazy"
                 />
@@ -835,7 +835,7 @@ export class HelpModal extends BaseModal {
                   >
                   <img
                     src=${assetUrl("images/helpModal/infoMenu2.webp")}
-                    alt="Enemy Info"
+                    alt=${translateText("help_modal.info_enemy_panel")}
                     class="rounded-lg shadow-lg border border-white/20 max-w-[240px]"
                     loading="lazy"
                   />
@@ -896,7 +896,7 @@ export class HelpModal extends BaseModal {
                   >
                   <img
                     src=${assetUrl("images/helpModal/infoMenu2Ally.webp")}
-                    alt="Ally Info"
+                    alt=${translateText("help_modal.info_ally_panel")}
                     class="rounded-lg shadow-lg border border-white/20 max-w-[240px]"
                     loading="lazy"
                   />
@@ -1196,7 +1196,7 @@ export class HelpModal extends BaseModal {
               >
                 <img
                   src=${assetUrl("images/helpModal/crown.webp")}
-                  alt="Rank 1"
+                  alt=${translateText("help_modal.icon_crown")}
                   class="rounded shadow-lg border border-white/10 h-24 w-auto object-contain"
                   loading="lazy"
                 />
@@ -1213,7 +1213,7 @@ export class HelpModal extends BaseModal {
               >
                 <img
                   src=${assetUrl("images/helpModal/traitor2.webp")}
-                  alt="Traitor"
+                  alt=${translateText("help_modal.icon_traitor")}
                   class="rounded shadow-lg border border-white/10 h-24 w-auto object-contain"
                   loading="lazy"
                 />
@@ -1230,7 +1230,7 @@ export class HelpModal extends BaseModal {
               >
                 <img
                   src=${assetUrl("images/helpModal/ally2.webp")}
-                  alt="Ally"
+                  alt=${translateText("help_modal.icon_ally")}
                   class="rounded shadow-lg border border-white/10 h-24 w-auto object-contain"
                   loading="lazy"
                 />
@@ -1247,7 +1247,7 @@ export class HelpModal extends BaseModal {
               >
                 <img
                   src=${assetUrl("images/helpModal/embargo.webp")}
-                  alt="Embargo"
+                  alt=${translateText("help_modal.icon_embargo")}
                   class="rounded shadow-lg border border-white/10 h-24 w-auto object-contain"
                   loading="lazy"
                 />
@@ -1264,7 +1264,7 @@ export class HelpModal extends BaseModal {
               >
                 <img
                   src=${assetUrl("images/helpModal/allianceRequest.webp")}
-                  alt="Request"
+                  alt=${translateText("help_modal.icon_request")}
                   class="rounded shadow-lg border border-white/10 h-24 w-auto object-contain"
                   loading="lazy"
                 />

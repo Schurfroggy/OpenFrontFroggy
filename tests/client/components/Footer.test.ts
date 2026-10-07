@@ -46,6 +46,28 @@ describe("page-footer version line", () => {
     expect(line?.textContent?.trim()).toBe(gameVersion);
   });
 
+  it("credits the open-source creators in self-hosted mode", async () => {
+    (window as { BOOTSTRAP_CONFIG?: unknown }).BOOTSTRAP_CONFIG = {
+      gameEnv: "dev",
+      selfHosted: true,
+      numWorkers: 1,
+      turnstileSiteKey: "test",
+      jwtAudience: "localhost",
+      instanceId: "test",
+      gitCommit: "test",
+    };
+    ClientEnv.reset();
+    await mount();
+
+    const attribution = footer.querySelector(
+      "[data-test-self-host-attribution]",
+    );
+    expect(attribution).not.toBeNull();
+    expect(attribution?.querySelector("a")?.href).toContain(
+      "store.steampowered.com/app/3560670/OpenFront/",
+    );
+  });
+
   it("appends the shell version inside the desktop shell", async () => {
     window.openfrontDesktop = {
       version: () => Promise.resolve("0.2.0"),

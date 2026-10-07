@@ -17,6 +17,7 @@ import { UserSettings } from "../core/game/UserSettings";
 import { PlayerCosmetics, TeamCountConfig } from "../core/Schemas";
 import { generateID } from "../core/Util";
 import { responseHasLinkedIdentity } from "./AccountIdentity";
+import { ClientEnv } from "./ClientEnv";
 import "./components/baseComponents/Button";
 import "./components/baseComponents/Modal";
 import { BaseModal } from "./components/BaseModal";
@@ -30,6 +31,10 @@ import { GameStartingModal } from "./GameStartingModal";
 import { showInGameAlert } from "./InGameModal";
 import { JoinLobbyEvent } from "./Main";
 import { fallbackPlayerName, ResolvedPlayerName } from "./PlayerName";
+import {
+  groupAchievementsByMap,
+  loadSelfHostedAchievements,
+} from "./SelfHostedAchievements";
 import { UsernameInput } from "./UsernameInput";
 import {
   getBotsForCompactMap,
@@ -111,7 +116,7 @@ const DEFAULT_OPTIONS = {
   goldMultiplierValue: undefined as number | undefined,
   startingGold: false,
   startingGoldValue: undefined as number | undefined,
-  disabledUnits: [] as UnitType[],
+  disabledUnits: [UnitType.MIRV] as UnitType[],
   customAlliances: false,
   customAllianceMinutes: undefined as number | undefined,
   waterNukes: false,
@@ -183,6 +188,8 @@ export class SinglePlayerModal extends BaseModal {
   @state() private randomSpawn: boolean = DEFAULT_OPTIONS.randomSpawn;
   @state() private useRandomMap: boolean = DEFAULT_OPTIONS.useRandomMap;
   @state() private gameMode: GameMode = DEFAULT_OPTIONS.gameMode;
+  @state() private presetLocked = false;
+  @state() private advancedSettingsEnabled = false;
   @state() private teamCount: TeamCountConfig = DEFAULT_OPTIONS.teamCount;
   @state() private showAchievements: boolean = false;
   @state() private mapWins: Map<GameMapType, Set<Difficulty>> = new Map();
@@ -274,9 +281,15 @@ export class SinglePlayerModal extends BaseModal {
   private handleUserMeResponse = (
     event: CustomEvent<UserMeResponse | false>,
   ) => {
+    if (ClientEnv.selfHosted?.() === true) return;
     this.userMeResponse = event.detail;
     this.applyAchievements(event.detail);
   };
+
+  private async loadLocalAchievements(): Promise<void> {
+    const achievements = await loadSelfHostedAchievements();
+    this.mapWins = groupAchievementsByMap(achievements);
+  }
 
   private renderNotLoggedInBanner(): TemplateResult {
     if (crazyGamesSDK.isOnCrazyGames()) {
@@ -326,26 +339,31 @@ export class SinglePlayerModal extends BaseModal {
       title: translateText("main.solo") || "Solo",
       onBack: () => this.close(),
       ariaLabel: translateText("common.back"),
-      rightContent: responseHasLinkedIdentity(this.userMeResponse)
-        ? html`<button
-              @click=${this.toggleAchievements}
-              class="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all shrink-0 ${this
-                .showAchievements
-                ? "bg-yellow-500/10 border-yellow-500/30 text-yellow-400"
-                : "text-white/60"}"
-            >
-              <img
-                src=${assetUrl("images/MedalIconWhite.svg")}
-                class="w-4 h-4 opacity-80 shrink-0"
-                style="${this.showAchievements ? "" : "filter: grayscale(1);"}"
-              />
-              <span
-                class="text-xs font-bold uppercase tracking-wider whitespace-nowrap"
-                >${translateText("single_modal.toggle_achievements")}</span
-              >
-            </button>
-            ${this.showAchievements ? this.renderMedalOverview() : null}`
-        : this.renderNotLoggedInBanner(),
+      rightContent:
+        ClientEnv.selfHosted?.() === true
+          ? html``
+          : responseHasLinkedIdentity(this.userMeResponse)
+            ? html`<button
+                  @click=${this.toggleAchievements}
+                  class="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all shrink-0 ${this
+                    .showAchievements
+                    ? "bg-yellow-500/10 border-yellow-500/30 text-yellow-400"
+                    : "text-white/60"}"
+                >
+                  <img
+                    src=${assetUrl("images/MedalIconWhite.svg")}
+                    class="w-4 h-4 opacity-80 shrink-0"
+                    style="${this.showAchievements
+                      ? ""
+                      : "filter: grayscale(1);"}"
+                  />
+                  <span
+                    class="text-xs font-bold uppercase tracking-wider whitespace-nowrap"
+                    >${translateText("single_modal.toggle_achievements")}</span
+                  >
+                </button>
+                ${this.showAchievements ? this.renderMedalOverview() : null}`
+            : this.renderNotLoggedInBanner(),
     });
   }
 
@@ -487,10 +505,17 @@ export class SinglePlayerModal extends BaseModal {
             class="block"
             .sectionGapClass=${"space-y-6"}
             .settings=${{
+              advancedSettings:
+                ClientEnv.selfHosted?.() === true
+                  ? { enabled: this.advancedSettingsEnabled }
+                  : undefined,
               map: {
                 selected: this.selectedMap,
                 useRandom: this.useRandomMap,
-                showMedals: this.showAchievements,
+                locked: this.presetLocked,
+                showMedals:
+                  ClientEnv.selfHosted?.() !== true && this.showAchievements,
+                showDifficultyAchievements: ClientEnv.selfHosted?.() === true,
                 mapWins: this.mapWins,
               },
               difficulty: {
@@ -499,6 +524,7 @@ export class SinglePlayerModal extends BaseModal {
               },
               gameMode: {
                 selected: this.gameMode,
+                locked: this.presetLocked,
               },
               teamCount: {
                 selected: this.teamCount,
@@ -561,6 +587,8 @@ export class SinglePlayerModal extends BaseModal {
               .handleConfigDoomsdayClockSpeedSelected}
             @game-mode-selected=${this.handleConfigGameModeSelected}
             @team-count-selected=${this.handleConfigTeamCountSelected}
+            @advanced-settings-changed=${this
+              .handleConfigAdvancedSettingsChanged}
             @bots-changed=${this.handleBotsChange}
             @nations-changed=${this.handleNationsChange}
             @option-toggle-changed=${this.handleConfigOptionToggleChanged}
@@ -666,6 +694,8 @@ export class SinglePlayerModal extends BaseModal {
     this.selectedMap = DEFAULT_OPTIONS.selectedMap;
     this.selectedDifficulty = DEFAULT_OPTIONS.selectedDifficulty;
     this.gameMode = DEFAULT_OPTIONS.gameMode;
+    this.presetLocked = false;
+    this.advancedSettingsEnabled = false;
     this.useRandomMap = DEFAULT_OPTIONS.useRandomMap;
     this.bots = DEFAULT_OPTIONS.bots;
     this.nations = 0;
@@ -692,8 +722,30 @@ export class SinglePlayerModal extends BaseModal {
     this.overtimeStartMinutes = DEFAULT_OPTIONS.overtimeStartMinutes;
   }
 
-  protected onOpen(): void {
+  public openWithPreset(map: GameMapType, mode: GameMode): void {
+    this.open({ presetMap: map, presetMode: mode, lockPreset: true });
+  }
+
+  protected onOpen(args?: Record<string, unknown>): void {
+    const validMap = Object.values(GameMapType).includes(
+      args?.presetMap as GameMapType,
+    );
+    const validMode = Object.values(GameMode).includes(
+      args?.presetMode as GameMode,
+    );
+    this.presetLocked =
+      args?.lockPreset === true && validMap === true && validMode === true;
+    if (validMap) {
+      this.selectedMap = args?.presetMap as GameMapType;
+      this.useRandomMap = false;
+    }
+    if (validMode) {
+      this.gameMode = args?.presetMode as GameMode;
+    }
     void this.loadNationCount();
+    if (ClientEnv.selfHosted?.() === true) {
+      void this.loadLocalAchievements();
+    }
     // Spend the cosmetics round trip while the player is picking a map, not
     // after they commit. startGame() still resolves cosmetics properly; this
     // only moves the network time off the click, for the slow-but-reachable
@@ -710,6 +762,7 @@ export class SinglePlayerModal extends BaseModal {
   }
 
   private handleConfigRandomMapSelected = () => {
+    if (this.presetLocked) return;
     this.handleSelectRandomMap();
   };
 
@@ -720,6 +773,7 @@ export class SinglePlayerModal extends BaseModal {
   }
 
   private handleConfigMapSelected = (e: Event) => {
+    if (this.presetLocked) return;
     const customEvent = e as CustomEvent<{ map: GameMapType }>;
     this.handleMapSelection(customEvent.detail.map);
   };
@@ -739,6 +793,7 @@ export class SinglePlayerModal extends BaseModal {
   };
 
   private handleConfigGameModeSelected = (e: Event) => {
+    if (this.presetLocked) return;
     const customEvent = e as CustomEvent<{ mode: GameMode }>;
     this.handleGameModeSelection(customEvent.detail.mode);
   };
@@ -747,6 +802,38 @@ export class SinglePlayerModal extends BaseModal {
     const customEvent = e as CustomEvent<{ count: TeamCountConfig }>;
     this.handleTeamCountSelection(customEvent.detail.count);
   };
+
+  private handleConfigAdvancedSettingsChanged = (e: Event) => {
+    const customEvent = e as CustomEvent<{ enabled: boolean }>;
+    this.advancedSettingsEnabled = customEvent.detail.enabled;
+    if (!this.advancedSettingsEnabled) {
+      this.resetAdvancedOptions();
+    }
+  };
+
+  private resetAdvancedOptions(): void {
+    this.bots = DEFAULT_OPTIONS.bots;
+    this.nations = this.defaultNationCount;
+    this.infiniteGold = DEFAULT_OPTIONS.infiniteGold;
+    this.infiniteTroops = DEFAULT_OPTIONS.infiniteTroops;
+    this.compactMap = DEFAULT_OPTIONS.compactMap;
+    this.maxTimer = DEFAULT_OPTIONS.maxTimer;
+    this.maxTimerValue = DEFAULT_OPTIONS.maxTimerValue;
+    this.instantBuild = DEFAULT_OPTIONS.instantBuild;
+    this.randomSpawn = DEFAULT_OPTIONS.randomSpawn;
+    this.disabledUnits = [...DEFAULT_OPTIONS.disabledUnits];
+    this.goldMultiplier = DEFAULT_OPTIONS.goldMultiplier;
+    this.goldMultiplierValue = DEFAULT_OPTIONS.goldMultiplierValue;
+    this.startingGold = DEFAULT_OPTIONS.startingGold;
+    this.startingGoldValue = DEFAULT_OPTIONS.startingGoldValue;
+    this.customAlliances = DEFAULT_OPTIONS.customAlliances;
+    this.customAllianceMinutes = DEFAULT_OPTIONS.customAllianceMinutes;
+    this.waterNukes = DEFAULT_OPTIONS.waterNukes;
+    this.doomsdayClock = DEFAULT_OPTIONS.doomsdayClock;
+    this.doomsdayClockSpeed = DEFAULT_OPTIONS.doomsdayClockSpeed;
+    this.overtime = DEFAULT_OPTIONS.overtime;
+    this.overtimeStartMinutes = DEFAULT_OPTIONS.overtimeStartMinutes;
+  }
 
   private handleCompactMapChange(val: boolean) {
     this.compactMap = val;
@@ -1137,6 +1224,12 @@ export class SinglePlayerModal extends BaseModal {
                   : GameMapSize.Normal,
                 gameType: GameType.Singleplayer,
                 gameMode: this.gameMode,
+                ...(ClientEnv.selfHosted?.() === true
+                  ? {
+                      selfHostedAchievementsEnabled:
+                        !this.advancedSettingsEnabled,
+                    }
+                  : {}),
                 playerTeams: this.teamCount,
                 difficulty: this.selectedDifficulty,
                 maxTimerValue: finalMaxTimerValue,

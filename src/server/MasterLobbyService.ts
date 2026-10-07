@@ -430,6 +430,9 @@ export class MasterLobbyService {
   }
 
   private async maybeScheduleLobby() {
+    // A friend-hosted server creates games only when a player creates a
+    // private lobby. Do not keep public queues alive in the background.
+    if (ServerEnv.selfHosted()) return;
     // Coordinated: the site's queue depth and countdowns are the
     // coordinator's; adding our own here would double-schedule.
     if (this.isCoordinated()) return;

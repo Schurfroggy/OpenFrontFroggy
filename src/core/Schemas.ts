@@ -52,6 +52,8 @@ export type Intent =
   | UpgradeStructureIntent
   | DeleteUnitIntent
   | KickPlayerIntent
+  | SetPlayerTeamIntent
+  | ApplyTeamPresetIntent
   | TogglePauseIntent
   | UpdateGameConfigIntent
   | ToggleGameStartTimer;
@@ -84,6 +86,8 @@ export type AllianceExtensionIntent = z.infer<
 >;
 export type DeleteUnitIntent = z.infer<typeof DeleteUnitIntentSchema>;
 export type KickPlayerIntent = z.infer<typeof KickPlayerIntentSchema>;
+export type SetPlayerTeamIntent = z.infer<typeof SetPlayerTeamIntentSchema>;
+export type ApplyTeamPresetIntent = z.infer<typeof ApplyTeamPresetIntentSchema>;
 export type TogglePauseIntent = z.infer<typeof TogglePauseIntentSchema>;
 export type UpdateGameConfigIntent = z.infer<
   typeof UpdateGameConfigIntentSchema
@@ -316,9 +320,8 @@ const ClientInfoSchema = z.object({
   // Watching rather than playing. Listed like anyone else — a spectator sees the
   // lobby exactly as a player does — but not in the simulation.
   spectator: z.boolean().optional(),
-  // Server-pinned team slot for matchmade team games, so the lobby's team
-  // preview can honour the pins instead of re-deriving teams that the server
-  // will overrule at start. Absent when the game isn't matchmade.
+  // Server-pinned team slot (matchmaking or a private-lobby choice), so the
+  // lobby preview and the eventual simulation use the same assignment.
   teamIndex: zb.uint().optional(),
 });
 
@@ -534,6 +537,10 @@ export const GameConfigSchema = z.object({
   donateTroops: z.boolean(), // Configures donations to humans only
   gameType: z.enum(GameType),
   gameMode: z.enum(GameMode),
+  // Friend-hosted games set this at game creation. It is intentionally part
+  // of the immutable game config so the win screen does not have to infer
+  // eligibility from UI state after the match has ended.
+  selfHostedAchievementsEnabled: z.boolean().optional(),
   rankedType: z.enum(RankedType).optional(), // Only set for ranked games.
   gameMapSize: z.enum(GameMapSize),
   doomsdayClock: DoomsdayClockConfigSchema.optional(),
@@ -573,6 +580,9 @@ export const GameConfigSchema = z.object({
   // per-client traffic. See LiveStatsController / GameServer.handleLiveStats.
   liveStatsEnabled: z.boolean().optional(),
   anonymizeNames: z.boolean().optional(),
+  // Private-lobby option: non-host players may move only themselves between
+  // teams. The host can always manage every human player before the game.
+  allowPlayerTeamSelection: z.boolean().optional(),
   // While anonymizeNames is on, clientIDs the host has granted real-name
   // visibility to (e.g. casters / observers). Everyone else stays anonymized.
   nameReveals: z.string().array().optional(),
@@ -802,6 +812,23 @@ export const KickPlayerIntentSchema = z.object({
   targetPublicID: MappedID.optional(),
 });
 
+export const TeamAssignmentPresetSchema = z.enum([
+  "balanced",
+  "humans_together",
+]);
+export type TeamAssignmentPreset = z.infer<typeof TeamAssignmentPresetSchema>;
+
+export const SetPlayerTeamIntentSchema = z.object({
+  type: z.literal("set_player_team"),
+  targetClientID: MappedID,
+  teamIndex: zb.uint().nullable(),
+});
+
+export const ApplyTeamPresetIntentSchema = z.object({
+  type: z.literal("apply_team_preset"),
+  preset: TeamAssignmentPresetSchema,
+});
+
 export const TogglePauseIntentSchema = z.object({
   type: z.literal("toggle_pause"),
   paused: z.boolean().default(false),
@@ -841,6 +868,8 @@ export const IntentSchema = z.discriminatedUnion("type", [
   AllianceExtensionIntentSchema,
   DeleteUnitIntentSchema,
   KickPlayerIntentSchema,
+  SetPlayerTeamIntentSchema,
+  ApplyTeamPresetIntentSchema,
   TogglePauseIntentSchema,
   UpdateGameConfigIntentSchema,
   ToggleGameStartTimerIntentSchema,
@@ -953,9 +982,9 @@ export const PlayerSchema = z.object({
   cosmetics: PlayerCosmeticsSchema.optional(),
   isLobbyCreator: z.boolean().optional(),
   friends: z.array(ID).optional(),
-  // Server-stamped team slot for matchmade team games (index into the
-  // game's team list). Feeds deterministic team assignment, so it must be
-  // identical for every client (like clanTag/friends).
+  // Server-stamped team slot (index into the game's team list). Feeds
+  // deterministic team assignment, so it must be identical for every client
+  // (like clanTag/friends).
   teamIndex: zb.uint().optional(),
 });
 

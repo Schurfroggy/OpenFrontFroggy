@@ -1,6 +1,7 @@
-import { LitElement, html } from "lit";
+import { LitElement, html, nothing } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { assetUrl } from "../../core/AssetUrls";
+import { ClientEnv } from "../ClientEnv";
 import { composeVersionDisplay, desktopVersion } from "../DesktopShell";
 import { currentGameVersion } from "../GameVersion";
 import "./SteamWishlistButton";
@@ -44,7 +45,7 @@ export class Footer extends LitElement {
             class="flex items-center justify-center gap-4 lg:gap-6 pt-2 w-full relative"
           >
             <a
-              href="https://github.com/openfrontio/OpenFrontIO"
+              href="https://github.com/Schurfroggy/OpenFrontFroggy"
               target="_blank"
               rel="noopener noreferrer"
               class="opacity-60 hover:opacity-100 hover:scale-110 transition-all"
@@ -103,6 +104,21 @@ export class Footer extends LitElement {
               />
             </a>
           </div>
+          ${ClientEnv.selfHosted?.() === true
+            ? html`<div
+                data-test-self-host-attribution
+                class="mt-1 px-4 text-center text-xs leading-relaxed text-white/55"
+              >
+                <span data-i18n="main.self_host_attribution"></span>
+                <a
+                  href="https://store.steampowered.com/app/3560670/OpenFront/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-i18n="main.self_host_support"
+                  class="ml-1 text-white/75 underline decoration-white/30 underline-offset-2 transition-colors hover:text-white"
+                ></a>
+              </div>`
+            : nothing}
           <!-- The nav bar shows the game version alone so it reads the same
                across web and Steam; the full string, shell version included,
                lives down here where a player can quote it in a bug report. -->
@@ -130,14 +146,16 @@ export class Footer extends LitElement {
 
         <!-- Phones keep the full store widget on the play page instead; there
              is no room for it here. -->
-        <div
-          class="hidden lg:flex lg:col-start-3 lg:items-center lg:justify-end lg:pt-2 lg:pr-20"
-        >
-          <steam-wishlist-button
-            campaign="home_desktop"
-            class="min-w-0 flex-1 max-w-[544px]"
-          ></steam-wishlist-button>
-        </div>
+        ${ClientEnv.selfHosted?.() === true
+          ? nothing
+          : html`<div
+              class="hidden lg:flex lg:col-start-3 lg:items-center lg:justify-end lg:pt-2 lg:pr-20"
+            >
+              <steam-wishlist-button
+                campaign="home_desktop"
+                class="min-w-0 flex-1 max-w-[544px]"
+              ></steam-wishlist-button>
+            </div>`}
 
         <!-- Single instance: translateText() resolves the active language via
              document.querySelector("lang-selector"), so a second one would

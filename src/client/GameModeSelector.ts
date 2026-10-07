@@ -3,16 +3,19 @@ import { customElement, state } from "lit/decorators.js";
 import { ClientEnv } from "src/client/ClientEnv";
 import { UserMeResponse } from "../core/ApiSchemas";
 import {
+  Difficulty,
   Duos,
   GameMapType,
   GameMode,
   GameType,
   HumansVsNations,
+  maps,
   Quads,
   Trios,
 } from "../core/game/Game";
 import { PublicGameInfo, PublicGames } from "../core/Schemas";
 import { getDesktopSessionState } from "./Auth";
+import "./components/Difficulties";
 import "./components/IOSAddToHomeScreenBanner";
 import {
   canJoinTrustedLobby,
@@ -22,6 +25,7 @@ import {
   viewerIsSignedIn,
   viewerIsTrusted,
 } from "./components/LobbyCard";
+import { MEDAL_ORDER } from "./components/map/Medals";
 import { crazyGamesSDK } from "./CrazyGamesSDK";
 import {
   getDesktopUpdateState,
@@ -36,6 +40,10 @@ import { showInGameAlert } from "./InGameModal";
 import { JoinLobbyModal } from "./JoinLobbyModal";
 import { PublicLobbySocket } from "./LobbySocket";
 import { JoinLobbyEvent } from "./Main";
+import {
+  groupAchievementsByMap,
+  loadSelfHostedAchievements,
+} from "./SelfHostedAchievements";
 import {
   backendUnreachableConfirmed,
   isPinnedToAVersion,
@@ -69,6 +77,37 @@ const TUTORIAL_ACTION =
 
 /** The Tutorial card shows beside Solo until the player has played this many games. */
 const TUTORIAL_CARD_MAX_GAMES = 5;
+export const SELF_HOSTED_PRESET_ROTATION_MS = 30_000;
+export const SELF_HOSTED_PRESET_COUNT = 5;
+
+export interface SelfHostedFeaturedPreset {
+  map: GameMapType;
+  mode: GameMode;
+}
+
+export function highestSelfHostedAchievementDifficulty(
+  wins: ReadonlySet<Difficulty> | undefined,
+): Difficulty | undefined {
+  return [...MEDAL_ORDER].reverse().find((difficulty) => wins?.has(difficulty));
+}
+
+export function randomSelfHostedPresets(
+  count = SELF_HOSTED_PRESET_COUNT,
+  random: () => number = Math.random,
+): SelfHostedFeaturedPreset[] {
+  const shuffled = [...maps];
+  for (let index = shuffled.length - 1; index > 0; index--) {
+    const swapIndex = Math.floor(random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [
+      shuffled[swapIndex],
+      shuffled[index],
+    ];
+  }
+  return shuffled.slice(0, Math.min(count, shuffled.length)).map((map) => ({
+    map: map.type,
+    mode: random() < 0.5 ? GameMode.FFA : GameMode.Team,
+  }));
+}
 
 /**
  * THE REACHABILITY RULE (OPE-439). Stated once, here; every other call site
@@ -334,6 +373,15 @@ export class GameModeSelector extends LitElement {
   private retryCooldownTimer: number | undefined;
   // An update/drain signal arrived during a lobby wait; prompt on leave-lobby.
   private updateDeferred = false;
+  @state() private selfHostedPresets: SelfHostedFeaturedPreset[] = [];
+  @state() private selfHostedPresetIndex = 0;
+  @state() private selectedSelfHostedPreset: SelfHostedFeaturedPreset | null =
+    null;
+  @state() private selfHostedMapWins: Map<GameMapType, Set<Difficulty>> =
+    new Map();
+  private selfHostedRotationTimer: number | undefined;
+  private selfHostedAchievementLoad = 0;
+  private selfHostedAchievementReloadTimer: number | undefined;
 
   private lobbySocket = new PublicLobbySocket(
     (lobbies) => this.handleLobbiesUpdate(lobbies),
@@ -447,6 +495,8 @@ export class GameModeSelector extends LitElement {
   disconnectedCallback() {
     this.stop();
     window.clearTimeout(this.retryCooldownTimer);
+    window.clearTimeout(this.selfHostedAchievementReloadTimer);
+    this.selfHostedAchievementLoad++;
     this.retryCoolingDown = false;
     window.removeEventListener(
       "username-validity-change",
@@ -484,6 +534,12 @@ export class GameModeSelector extends LitElement {
 
   private handleValidityChange = (e: Event) => {
     this.inputValid = (e as CustomEvent).detail?.isValid ?? true;
+    if (ClientEnv.selfHosted?.() !== true || !this.inputValid) return;
+    window.clearTimeout(this.selfHostedAchievementReloadTimer);
+    this.selfHostedAchievementReloadTimer = window.setTimeout(
+      () => void this.loadSelfHostedAchievementBadges(),
+      250,
+    );
   };
 
   private onDesktopUpdateState = (e: Event) => {
@@ -526,6 +582,8 @@ export class GameModeSelector extends LitElement {
   public stop() {
     this.feedWanted = false;
     this.lobbySocket.stop();
+    window.clearInterval(this.selfHostedRotationTimer);
+    this.selfHostedRotationTimer = undefined;
   }
 
   // Also drops the snapshot: a card from a feed we have closed is a lobby the
@@ -550,12 +608,63 @@ export class GameModeSelector extends LitElement {
    * snapshot and re-primes the list from the server.
    */
   public start() {
+    if (ClientEnv.selfHosted?.() === true) {
+      this.startSelfHostedRotation();
+      void this.loadSelfHostedAchievementBadges();
+      return;
+    }
     this.openLobbyFeed();
+  }
+
+  private async loadSelfHostedAchievementBadges(): Promise<void> {
+    const load = ++this.selfHostedAchievementLoad;
+    this.selfHostedMapWins = new Map();
+    const achievements = await loadSelfHostedAchievements();
+    if (load !== this.selfHostedAchievementLoad) return;
+    this.selfHostedMapWins = groupAchievementsByMap(achievements);
+  }
+
+  private renderSelfHostedAchievement(map: GameMapType): TemplateResult {
+    const highest = highestSelfHostedAchievementDifficulty(
+      this.selfHostedMapWins.get(map),
+    );
+    if (highest === undefined) return html`${nothing}`;
+
+    return html`<div
+      class="pointer-events-none absolute left-1.5 top-1.5 z-10 rounded-lg border border-red-400/30 bg-black/70 px-1.5 shadow-lg backdrop-blur-sm"
+      title=${translateText(`difficulty.${highest.toLowerCase()}`)}
+    >
+      <difficulty-display
+        .difficultyKey=${highest}
+        class="block"
+      ></difficulty-display>
+    </div>`;
+  }
+
+  private startSelfHostedRotation() {
+    window.clearInterval(this.selfHostedRotationTimer);
+    this.rotateSelfHostedPreset();
+    this.selfHostedRotationTimer = window.setInterval(
+      () => this.rotateSelfHostedPreset(),
+      SELF_HOSTED_PRESET_ROTATION_MS,
+    );
+  }
+
+  private rotateSelfHostedPreset() {
+    this.selfHostedPresets = randomSelfHostedPresets();
+    this.selfHostedPresetIndex = 0;
+    this.selfHostedPresets.forEach((preset) =>
+      mapAspectRatios.ensure(preset.map, () => this.requestUpdate()),
+    );
   }
 
   private openLobbyFeed(refreshList = false) {
     this.feedWanted = true;
     this.feedGaveUp = false;
+    if (ClientEnv.selfHosted?.() === true) {
+      this.lobbies = null;
+      return;
+    }
     if (lobbyFeedSuspended(this.desktopSessionState)) {
       // The session may have dropped while Main had the feed stopped, in
       // which case the snapshot from before the game is still here and its
@@ -646,6 +755,7 @@ export class GameModeSelector extends LitElement {
   }
 
   render() {
+    if (ClientEnv.selfHosted?.() === true) return this.renderSelfHosted();
     const ffa = this.lobbies?.games?.["ffa"]?.[0];
     const teams = this.lobbies?.games?.["team"]?.[0];
     const special = this.lobbies?.games?.["special"]?.[0];
@@ -756,6 +866,193 @@ export class GameModeSelector extends LitElement {
           : nothing}
       </div>
     `;
+  }
+
+  private renderSelfHosted() {
+    const preset = this.selfHostedPresets[this.selfHostedPresetIndex] ?? {
+      map: GameMapType.World,
+      mode: GameMode.FFA,
+    };
+    const modeLabel = translateText(
+      preset.mode === GameMode.FFA ? "game_mode.ffa" : "game_mode.teams",
+    );
+    const previewLobby = {
+      gameID: "self-hosted-featured",
+      numClients: 0,
+      publicGameType: preset.mode === GameMode.FFA ? "ffa" : "team",
+      gameConfig: {
+        gameMap: preset.map,
+        gameMode: preset.mode,
+        gameType: GameType.Singleplayer,
+        playerTeams: 2,
+      },
+    } as PublicGameInfo;
+
+    return html`
+      <div
+        class="flex flex-col gap-4 w-full max-w-5xl px-4 pb-4 mx-auto sm:px-0"
+      >
+        <div class="relative min-w-0">
+          ${lobbyCard({
+            lobby: previewLobby,
+            subtitle: modeLabel,
+            timeDisplay: translateText("mode_selector.local_featured"),
+            timeDisplayUppercase: true,
+            disabled: !this.inputValid,
+            onClick: () => this.openSelfHostedPresetChoice(preset),
+            heightClass: "h-52 sm:h-[min(24rem,40vh)]",
+            showPlayerCount: false,
+          })}
+          ${this.renderSelfHostedAchievement(preset.map)}
+          <button
+            class="absolute left-2 top-1/2 z-10 flex size-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/65 text-2xl text-white shadow-lg transition-colors hover:bg-black/85"
+            aria-label=${translateText("mode_selector.local_previous")}
+            @click=${() => this.changeSelfHostedPreset(-1)}
+          >
+            ‹
+          </button>
+          <button
+            class="absolute right-2 top-1/2 z-10 flex size-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/65 text-2xl text-white shadow-lg transition-colors hover:bg-black/85"
+            aria-label=${translateText("mode_selector.local_next")}
+            @click=${() => this.changeSelfHostedPreset(1)}
+          >
+            ›
+          </button>
+          <div
+            class="absolute bottom-2 left-1/2 z-10 flex -translate-x-1/2 gap-1.5 rounded-full bg-black/60 px-2.5 py-1.5"
+          >
+            ${this.selfHostedPresets.map(
+              (_, index) => html`
+                <button
+                  class="size-2 rounded-full transition-colors ${index ===
+                  this.selfHostedPresetIndex
+                    ? "bg-malibu-blue"
+                    : "bg-white/45 hover:bg-white/75"}"
+                  aria-label="${index + 1}/${this.selfHostedPresets.length}"
+                  @click=${() => (this.selfHostedPresetIndex = index)}
+                ></button>
+              `,
+            )}
+          </div>
+        </div>
+
+        <div class="flex gap-4 h-14">
+          <div class="flex-[2]">
+            ${this.renderSmallActionCard(
+              translateText("main.solo"),
+              this.openSinglePlayerModal,
+              PRIMARY_ACTION,
+            )}
+          </div>
+          ${getGamesPlayed() < TUTORIAL_CARD_MAX_GAMES
+            ? html`<div class="flex-1">
+                ${this.renderSmallActionCard(
+                  translateText("main.tutorial"),
+                  this.startTutorial,
+                  TUTORIAL_ACTION,
+                )}
+              </div>`
+            : nothing}
+        </div>
+        <div class="grid grid-cols-2 gap-4 h-16">
+          ${this.renderSmallActionCard(
+            translateText("main.create"),
+            this.openHostLobby,
+          )}
+          ${this.renderSmallActionCard(
+            translateText("main.join"),
+            this.openJoinLobby,
+          )}
+        </div>
+
+        ${this.selectedSelfHostedPreset
+          ? this.renderSelfHostedPresetChoice(this.selectedSelfHostedPreset)
+          : nothing}
+      </div>
+    `;
+  }
+
+  private changeSelfHostedPreset(offset: number) {
+    const count = this.selfHostedPresets.length;
+    if (count === 0) return;
+    this.selfHostedPresetIndex =
+      (this.selfHostedPresetIndex + offset + count) % count;
+  }
+
+  private openSelfHostedPresetChoice(preset: SelfHostedFeaturedPreset) {
+    if (!this.validateUsername()) return;
+    this.selectedSelfHostedPreset = { ...preset };
+  }
+
+  private renderSelfHostedPresetChoice(preset: SelfHostedFeaturedPreset) {
+    const mapName = translateText(
+      maps.find((candidate) => candidate.type === preset.map)?.translationKey ??
+        "map.world",
+    );
+    const modeName = translateText(
+      preset.mode === GameMode.FFA ? "game_mode.ffa" : "game_mode.teams",
+    );
+    return html`
+      <div
+        class="fixed inset-0 z-[10020] flex items-center justify-center bg-black/80 px-4"
+        @click=${(event: Event) => {
+          if (event.target === event.currentTarget) {
+            this.selectedSelfHostedPreset = null;
+          }
+        }}
+      >
+        <div
+          class="relative w-full max-w-md rounded-2xl border border-malibu-blue/40 bg-surface p-6 shadow-2xl"
+        >
+          <button
+            class="absolute right-3 top-3 flex size-8 items-center justify-center rounded-lg text-xl text-white/50 transition-colors hover:bg-white/10 hover:text-white"
+            aria-label=${translateText("common.cancel")}
+            @click=${() => (this.selectedSelfHostedPreset = null)}
+          >
+            ×
+          </button>
+          <h2 class="mb-2 pr-8 text-lg font-bold text-white">
+            ${translateText("mode_selector.local_choice_title")}
+          </h2>
+          <p class="mb-5 text-sm font-medium text-white/65">
+            ${translateText("mode_selector.local_choice_message", {
+              map: mapName,
+              mode: modeName,
+            })}
+          </p>
+          <div class="grid grid-cols-2 gap-3">
+            <button
+              class="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:bg-white/10"
+              @click=${() => this.launchSelfHostedPreset("solo", preset)}
+            >
+              ${translateText("mode_selector.local_choice_solo")}
+            </button>
+            <button
+              class="rounded-xl border-0 bg-malibu-blue px-4 py-3 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:bg-aquarius"
+              @click=${() => this.launchSelfHostedPreset("host", preset)}
+            >
+              ${translateText("mode_selector.local_choice_host")}
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private launchSelfHostedPreset(
+    destination: "solo" | "host",
+    preset: SelfHostedFeaturedPreset,
+  ) {
+    this.selectedSelfHostedPreset = null;
+    if (destination === "solo") {
+      (
+        document.querySelector("single-player-modal") as SinglePlayerModal
+      )?.openWithPreset(preset.map, preset.mode);
+      return;
+    }
+    (
+      document.querySelector("host-lobby-modal") as HostLobbyModal
+    )?.openWithPreset(preset.map, preset.mode);
   }
 
   /**

@@ -157,6 +157,7 @@ export class ClientEnv {
     }
     ClientEnv.values = {
       gameEnv: parseGameEnv(bc.gameEnv),
+      selfHosted: bc.selfHosted === true,
       // Worker-count source, when the page carries one: web shells inject
       // the cluster map + own letter; desktop shells predating the map
       // inject the numWorkers scalar. Either shape hydrates — the shell
@@ -191,6 +192,15 @@ export class ClientEnv {
   // takes a source so we don't have to keep them in sync by hand.
   static env(): GameEnv {
     return ClientEnv.get().gameEnv;
+  }
+  static selfHosted(): boolean {
+    // Feature flag is optional so older desktop renderers and isolated
+    // component tests that do not provide a full bootstrap config retain the
+    // normal hosted behavior.
+    return (
+      typeof window !== "undefined" &&
+      window.BOOTSTRAP_CONFIG?.selfHosted === true
+    );
   }
   static stripePublishableKey(): string | undefined {
     return ClientEnv.get().stripePublishableKey;
@@ -658,6 +668,7 @@ export function deriveShareBase(
 
 export interface ClientEnvValues {
   gameEnv: GameEnv;
+  selfHosted: boolean;
   // A worker-count source, when the page names a server at all: cluster +
   // instanceLetter from a web shell, or the legacy numWorkers scalar from a
   // desktop shell that predates the cluster map. A static page carries

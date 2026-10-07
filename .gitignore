@@ -23,6 +23,11 @@ src/assets/
 eslint_out.txt
 tests/perf/output/
 
+# Friend-hosted achievement database and SQLite sidecar files
+data/*.sqlite
+data/*.sqlite-shm
+data/*.sqlite-wal
+
 # Locally built Go binary (gen-maps uses `go run .`)
 map-generator/map-generator
 map-generator/map-generator.exe

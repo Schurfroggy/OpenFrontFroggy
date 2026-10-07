@@ -123,6 +123,20 @@ describe("ServerEnv.turnstileSiteKey", () => {
   });
 });
 
+describe("ServerEnv.selfHosted", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test("is enabled only by the explicit true value", () => {
+    vi.stubEnv("SELF_HOSTED", "true");
+    expect(ServerEnv.selfHosted()).toBe(true);
+
+    vi.stubEnv("SELF_HOSTED", "false");
+    expect(ServerEnv.selfHosted()).toBe(false);
+  });
+});
+
 describe("ServerEnv.jwtAudience", () => {
   afterEach(() => {
     vi.unstubAllEnvs();

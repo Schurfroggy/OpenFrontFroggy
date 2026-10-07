@@ -1,6 +1,11 @@
-import { html, LitElement, TemplateResult } from "lit";
-import { customElement } from "lit/decorators.js";
+import { html, LitElement, nothing, TemplateResult } from "lit";
+import { customElement, state } from "lit/decorators.js";
 import { assetUrl } from "../../core/AssetUrls";
+import { ClientEnv } from "../ClientEnv";
+import {
+  loadSelfHostedAccount,
+  loadSelfHostedAdminOverview,
+} from "../SelfHostedAccount";
 import { NavNotificationsController } from "./NavNotificationsController";
 
 const MOBILE_ITEM =
@@ -15,6 +20,9 @@ const MOBILE_ITEM =
 @customElement("mobile-nav-bar")
 export class MobileNavBar extends LitElement {
   private _notifications = new NavNotificationsController(this);
+  @state() private selfHostedAdmin = false;
+  @state() private pendingResets = 0;
+  private adminTimer: number | null = null;
 
   createRenderRoot() {
     return this;
@@ -23,6 +31,13 @@ export class MobileNavBar extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     window.addEventListener("showPage", this._onShowPage);
+    if (ClientEnv.selfHosted?.() === true) {
+      void this.refreshAdminState();
+      this.adminTimer = window.setInterval(
+        () => void this.refreshAdminState(),
+        15000,
+      );
+    }
 
     const current = window.currentPageId;
     if (current) {
@@ -35,6 +50,7 @@ export class MobileNavBar extends LitElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     window.removeEventListener("showPage", this._onShowPage);
+    if (this.adminTimer !== null) window.clearInterval(this.adminTimer);
   }
 
   private _onShowPage = (e: Event) => {
@@ -60,6 +76,19 @@ export class MobileNavBar extends LitElement {
       <span class="absolute inset-0 ${color} rounded-full animate-ping"></span>
       <span class="absolute inset-0 ${color} rounded-full"></span>
     </span>`;
+  }
+
+  private async refreshAdminState() {
+    const account = await loadSelfHostedAccount(true);
+    this.selfHostedAdmin = account?.role === "admin";
+    if (!this.selfHostedAdmin) {
+      this.pendingResets = 0;
+      return;
+    }
+    const overview = await loadSelfHostedAdminOverview();
+    this.pendingResets =
+      overview?.resets.filter((reset) => reset.status === "pending").length ??
+      0;
   }
 
   render() {
@@ -102,33 +131,61 @@ export class MobileNavBar extends LitElement {
           data-page="page-play"
           data-i18n="main.play"
         ></button>
-        <div
-          class="no-crazygames nav-menu-item flex items-center w-full cursor-pointer"
-          data-page="page-item-store"
-          @click=${this._notifications.onStoreClick}
-        >
-          <button class="${MOBILE_ITEM}" data-i18n="main.store"></button>
-          ${this._notifications.showStoreDot()
-            ? this._renderDot("bg-red-500")
-            : ""}
-        </div>
-        <button
-          class="${MOBILE_ITEM} ${currentPage === "page-inventory"
-            ? "active"
-            : ""}"
-          data-page="page-inventory"
-          data-i18n="main.inventory"
-        ></button>
-        <button
-          class="${MOBILE_ITEM}"
-          data-page="page-leaderboard"
-          data-i18n="main.leaderboard"
-        ></button>
-        <button
-          class="no-crazygames ${MOBILE_ITEM}"
-          data-page="page-clan"
-          data-i18n="main.clans"
-        ></button>
+        ${ClientEnv.selfHosted?.() === true
+          ? html`<button
+              class="${MOBILE_ITEM} ${currentPage === "page-self-hosted-account"
+                ? "active"
+                : ""}"
+              data-page="page-self-hosted-account"
+              data-i18n="main.my_account"
+            ></button>`
+          : nothing}
+        ${this.selfHostedAdmin
+          ? html`<button
+              class="${MOBILE_ITEM} flex items-center ${currentPage ===
+              "page-self-hosted-admin"
+                ? "active"
+                : ""}"
+              data-page="page-self-hosted-admin"
+            >
+              <span data-i18n="main.admin"></span>
+              ${this.pendingResets > 0
+                ? html`<span
+                    class="ml-3 flex min-w-6 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs leading-6 text-white"
+                    >${this.pendingResets}</span
+                  >`
+                : nothing}
+            </button>`
+          : nothing}
+        ${ClientEnv.selfHosted?.() === true
+          ? nothing
+          : html`<div
+                class="no-crazygames nav-menu-item flex items-center w-full cursor-pointer"
+                data-page="page-item-store"
+                @click=${this._notifications.onStoreClick}
+              >
+                <button class="${MOBILE_ITEM}" data-i18n="main.store"></button>
+                ${this._notifications.showStoreDot()
+                  ? this._renderDot("bg-red-500")
+                  : ""}
+              </div>
+              <button
+                class="${MOBILE_ITEM} ${currentPage === "page-inventory"
+                  ? "active"
+                  : ""}"
+                data-page="page-inventory"
+                data-i18n="main.inventory"
+              ></button>
+              <button
+                class="${MOBILE_ITEM}"
+                data-page="page-leaderboard"
+                data-i18n="main.leaderboard"
+              ></button>
+              <button
+                class="no-crazygames ${MOBILE_ITEM}"
+                data-page="page-clan"
+                data-i18n="main.clans"
+              ></button>`}
         <div
           class="flex flex-col w-full mt-auto [.in-game_&]:hidden items-end justify-end pt-4 border-t border-white/10"
         ></div>

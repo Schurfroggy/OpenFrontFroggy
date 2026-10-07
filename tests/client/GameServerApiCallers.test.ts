@@ -20,9 +20,12 @@ vi.mock("../../src/client/ServerList", async (importOriginal) => {
 });
 
 import { createLobby } from "../../src/client/Api";
+import { getPlayToken } from "../../src/client/Auth";
 import { ClientEnv } from "../../src/client/ClientEnv";
 import { JoinLobbyModal } from "../../src/client/JoinLobbyModal";
 import { MatchmakingModal } from "../../src/client/Matchmaking";
+import { GameMapType, GameMode } from "../../src/core/game/Game";
+import { testGameConfig } from "../util/Wire";
 
 // Every remaining caller of the game server's HTTP API, driven through real
 // production code. Each one used to build a relative URL, which silently
@@ -111,6 +114,25 @@ describe("createLobby", () => {
     expect((init.headers as Record<string, string>).Authorization).toBe(
       "Bearer play-token",
     );
+  });
+
+  it("uses this tab's name snapshot for the creator identity", async () => {
+    await createLobby(undefined, "Host Tab Name");
+
+    expect(vi.mocked(getPlayToken)).toHaveBeenCalledWith("Host Tab Name");
+  });
+
+  it("creates the lobby with the host's initial map and mode atomically", async () => {
+    const config = testGameConfig({
+      gameMap: GameMapType.GreatLakes,
+      gameMode: GameMode.Team,
+      playerTeams: 2,
+    });
+
+    await createLobby(config);
+
+    const init = lastCall()[1] as RequestInit;
+    expect(JSON.parse(String(init.body))).toEqual(config);
   });
 });
 

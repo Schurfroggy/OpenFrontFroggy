@@ -1,8 +1,11 @@
 import { LitElement, html } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
+let nextSettingToggleId = 0;
+
 @customElement("setting-toggle")
 export class SettingToggle extends LitElement {
+  private readonly inputId = `setting-toggle-input-${nextSettingToggleId++}`;
   @property() label = "Setting";
   @property() description = "";
   @property() id = "";
@@ -49,7 +52,7 @@ export class SettingToggle extends LitElement {
           <input
             type="checkbox"
             class="opacity-0 w-0 h-0 peer"
-            id=${this.id}
+            id=${this.inputId}
             .checked=${this.checked}
             ?disabled=${this.disabled}
             @change=${this.handleChange}

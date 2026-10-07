@@ -336,6 +336,7 @@ export class LocalServer {
     record: PartialGameRecord,
     unloading: boolean,
   ): Promise<void> {
+    if (ClientEnv.selfHosted?.() === true) return;
     this.archiveInFlight = true;
     try {
       const authHeader = await getAuthHeader();

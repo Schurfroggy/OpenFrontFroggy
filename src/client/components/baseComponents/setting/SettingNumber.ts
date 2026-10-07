@@ -1,8 +1,11 @@
 import { LitElement, html } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
+let nextSettingNumberId = 0;
+
 @customElement("setting-number")
 export class SettingNumber extends LitElement {
+  private readonly inputId = `setting-number-input-${nextSettingNumberId++}`;
   @property() label = "Setting";
   @property() description = "";
   @property({ type: Number }) value = 0;
@@ -40,7 +43,7 @@ export class SettingNumber extends LitElement {
         <div class="flex flex-col flex-1 min-w-0 mr-4">
           <label
             class="text-white font-bold text-base block mb-1"
-            for="setting-number-input"
+            for=${this.inputId}
             >${this.label}</label
           >
           <div class="text-white/50 text-sm leading-snug">
@@ -49,7 +52,7 @@ export class SettingNumber extends LitElement {
         </div>
         <input
           type="number"
-          id="setting-number-input"
+          id=${this.inputId}
           class="shrink-0 w-[100px] py-2 px-3 border border-white/20 rounded-lg bg-black/60 text-white font-mono text-center focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
           .value=${String(this.value ?? 0)}
           min=${this.min}

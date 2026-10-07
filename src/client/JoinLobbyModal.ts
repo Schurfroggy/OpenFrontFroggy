@@ -27,7 +27,7 @@ import { PublicLobbySocket } from "./LobbySocket";
 import { JoinLobbyEvent } from "./Main";
 import { ensureServerList, redirectToGameVersion } from "./ServerList";
 import { terrainMapFileLoader } from "./TerrainMapFileLoader";
-import { SendSpectateEvent } from "./Transport";
+import { SendSetPlayerTeamIntentEvent, SendSpectateEvent } from "./Transport";
 import { normaliseMapKey } from "./Utils";
 import { findVersionedShell } from "./VersionedReplay";
 import { BaseModal } from "./components/BaseModal";
@@ -258,6 +258,19 @@ export class JoinLobbyModal extends BaseModal {
                           this.gameConfig?.nations ?? "default",
                           this.nationCount,
                         )}
+                        .allowPlayerTeamSelection=${this.gameConfig
+                          ?.allowPlayerTeamSelection ?? false}
+                        .teamEditingLocked=${this.lobbyStartAt !== null}
+                        .onAssignPlayerTeam=${this.gameConfig
+                          ?.allowPlayerTeamSelection
+                          ? (clientID: string, teamIndex: number | null) =>
+                              this.eventBus?.emit(
+                                new SendSetPlayerTeamIntentEvent(
+                                  clientID,
+                                  teamIndex,
+                                ),
+                              )
+                          : undefined}
                       ></lobby-player-view>
                     `
                   : ""}
@@ -524,7 +537,9 @@ export class JoinLobbyModal extends BaseModal {
     // disconnect the player mid game-start.
     this.leaveLobbyOnClose = true;
     this.hostedLobbiesLoaded = false;
-    void this.hostedLobbySocket.start();
+    if (ClientEnv.selfHosted?.() !== true) {
+      void this.hostedLobbySocket.start();
+    }
     const lobbyId = typeof args?.lobbyId === "string" ? args.lobbyId : "";
     const lobbyInfo = args?.lobbyInfo as GameInfo | PublicGameInfo | undefined;
     if (lobbyId) {
@@ -1169,6 +1184,9 @@ export class JoinLobbyModal extends BaseModal {
   ): Promise<
     "success" | "redirected" | "not_found" | "version_mismatch" | "error"
   > {
+    // Friend-hosted games are ephemeral and never uploaded to the official
+    // archive API. A missing local lobby is simply missing.
+    if (ClientEnv.selfHosted?.() === true) return "not_found";
     const archiveResponse = await fetch(`${getApiBase()}/game/${lobbyId}`, {
       method: "GET",
       headers: {

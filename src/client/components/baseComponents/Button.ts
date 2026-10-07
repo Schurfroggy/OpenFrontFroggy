@@ -19,6 +19,7 @@ export class OButton extends LitElement {
   @property({ type: Boolean }) disable = false;
   @property({ type: Boolean }) submit = false;
   @property({ type: Boolean }) uppercase = true;
+  @property({ attribute: false }) clickHandler?: (event: MouseEvent) => void;
 
   createRenderRoot() {
     return this;
@@ -98,6 +99,7 @@ export class OButton extends LitElement {
         ?disabled=${this.disable}
         type=${this.submit ? "submit" : "button"}
         aria-label=${iconOnly ? label : nothing}
+        @click=${this.clickHandler}
       >
         ${this.icon && this.iconPosition !== "right" ? this.icon : nothing}
         ${iconOnly ? nothing : html`<span class="min-w-0">${label}</span>`}

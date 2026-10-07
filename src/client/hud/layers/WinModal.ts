@@ -10,7 +10,7 @@ import {
 } from "../../../client/Utils";
 import { Pattern } from "../../../core/CosmeticSchemas";
 import { EventBus } from "../../../core/EventBus";
-import { RankedType } from "../../../core/game/Game";
+import { GameType, RankedType } from "../../../core/game/Game";
 import { GameUpdateType } from "../../../core/game/GameUpdates";
 import { getUserMe } from "../../Api";
 import "../../components/CosmeticCard";
@@ -26,6 +26,7 @@ import {
 import { crazyGamesSDK } from "../../CrazyGamesSDK";
 import { isDesktopShell } from "../../DesktopShell";
 import { Platform } from "../../Platform";
+import { recordSelfHostedAchievement } from "../../SelfHostedAchievements";
 import { PlaySoundEffectEvent } from "../../sound/Sounds";
 import { steamSDK } from "../../SteamSDK";
 import { SendWinnerEvent } from "../../Transport";
@@ -37,6 +38,7 @@ export class WinModal extends LitElement implements Controller {
   public eventBus: EventBus;
 
   private hasShownDeathModal = false;
+  private achievementRecorded = false;
 
   @state()
   isVisible = false;
@@ -148,7 +150,7 @@ export class WinModal extends LitElement implements Controller {
             : html`<iframe
                 class="absolute top-0 left-0 w-full h-full rounded-sm"
                 src="${this.isVisible ? TUTORIAL_VIDEO_URL : ""}"
-                title="YouTube video player"
+                title=${translateText("win_modal.youtube_player")}
                 frameborder="0"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowfullscreen
@@ -335,6 +337,7 @@ export class WinModal extends LitElement implements Controller {
         if (wu.winner[1] === this.game.myPlayer()?.team()) {
           this._title = translateText("win_modal.your_team");
           this.isWin = true;
+          this.recordAchievement();
           crazyGamesSDK.happytime();
         } else {
           this._title = translateText("win_modal.other_team", {
@@ -368,6 +371,7 @@ export class WinModal extends LitElement implements Controller {
         ) {
           this._title = translateText("win_modal.you_won");
           this.isWin = true;
+          this.recordAchievement();
           crazyGamesSDK.happytime();
         } else {
           this._title = translateText("win_modal.other_won", {
@@ -379,6 +383,32 @@ export class WinModal extends LitElement implements Controller {
         history.replaceState(null, "", `${window.location.pathname}?replay`);
         this.show();
       }
+    });
+  }
+
+  private recordAchievement(): void {
+    if (this.achievementRecorded) return;
+    const player = this.game.myPlayer();
+    const config = this.game.config().gameConfig();
+    if (
+      player === undefined ||
+      player === null ||
+      config.selfHostedAchievementsEnabled !== true ||
+      (config.gameType !== GameType.Singleplayer &&
+        config.gameType !== GameType.Private)
+    ) {
+      return;
+    }
+    this.achievementRecorded = true;
+    void recordSelfHostedAchievement({
+      playerName: player.displayName(),
+      mapName: config.gameMap,
+      difficulty: config.difficulty,
+      source:
+        config.gameType === GameType.Singleplayer
+          ? "singleplayer"
+          : "multiplayer",
+      gameId: this.game.gameID(),
     });
   }
 

@@ -30,6 +30,7 @@ const lobby = (over: Partial<IntentGameState> = {}): IntentGameState => ({
   isListed: false,
   isQueued: false,
   hasStarted: false,
+  allowPlayerTeamSelection: false,
   ...over,
 });
 
@@ -41,6 +42,20 @@ const config = (c: Partial<GameConfig>): Intent => ({
 const timer: Intent = { type: "toggle_game_start_timer" };
 const pause: Intent = { type: "toggle_pause", paused: true };
 const spawn: Intent = { type: "spawn", tile: 1 };
+const chooseOwnTeam: Intent = {
+  type: "set_player_team",
+  targetClientID: cid("p1"),
+  teamIndex: 0,
+};
+const moveOtherPlayer: Intent = {
+  type: "set_player_team",
+  targetClientID: cid("p2"),
+  teamIndex: 1,
+};
+const balanceTeams: Intent = {
+  type: "apply_team_preset",
+  preset: "balanced",
+};
 
 describe("authorizeIntent", () => {
   it.each<[string, Intent, IntentActor, IntentGameState, number | null]>([
@@ -197,6 +212,32 @@ describe("authorizeIntent", () => {
       null,
     ],
     ["pause before the start", pause, host, lobby(), 409],
+
+    ["team choice by the host", moveOtherPlayer, host, lobby(), null],
+    [
+      "team choice in a listed lobby",
+      moveOtherPlayer,
+      host,
+      lobby({ isListed: true }),
+      409,
+    ],
+    ["disabled team choice by a guest", chooseOwnTeam, player, lobby(), 403],
+    [
+      "enabled own-team choice by a guest",
+      chooseOwnTeam,
+      player,
+      lobby({ allowPlayerTeamSelection: true }),
+      null,
+    ],
+    [
+      "guest moving another player",
+      moveOtherPlayer,
+      player,
+      lobby({ allowPlayerTeamSelection: true }),
+      403,
+    ],
+    ["team preset by the host", balanceTeams, host, lobby(), null],
+    ["team preset by a guest", balanceTeams, player, lobby(), 403],
 
     ["gameplay by a player", spawn, player, lobby(), null],
     [

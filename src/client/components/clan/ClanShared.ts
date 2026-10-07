@@ -335,7 +335,10 @@ export function renderWLBarRow(
       <div
         class="relative flex-1 h-5 rounded-md overflow-hidden bg-white/5"
         role="img"
-        aria-label="${wins} wins, ${losses} losses"
+        aria-label=${translateText("clan_modal.win_loss_aria", {
+          wins,
+          losses,
+        })}
       >
         <div class="absolute inset-0 flex">
           ${wins > 0

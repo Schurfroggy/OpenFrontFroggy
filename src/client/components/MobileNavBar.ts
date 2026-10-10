@@ -6,6 +6,7 @@ import {
   loadSelfHostedAccount,
   loadSelfHostedAdminOverview,
 } from "../SelfHostedAccount";
+import { translateText } from "../Utils";
 import { NavNotificationsController } from "./NavNotificationsController";
 
 const MOBILE_ITEM =
@@ -148,7 +149,7 @@ export class MobileNavBar extends LitElement {
                 : ""}"
               data-page="page-self-hosted-admin"
             >
-              <span data-i18n="main.admin"></span>
+              <span>${translateText("main.admin")}</span>
               ${this.pendingResets > 0
                 ? html`<span
                     class="ml-3 flex min-w-6 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs leading-6 text-white"

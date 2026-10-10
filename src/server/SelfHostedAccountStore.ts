@@ -41,6 +41,15 @@ export interface SelfHostedAdminAccount extends SelfHostedAccount {
   activeSessions: number;
 }
 
+export type PasswordResetRequestResult =
+  | {
+      outcome: "created";
+      requestId: string;
+      recoveryToken: string;
+    }
+  | { outcome: "account_not_found" }
+  | { outcome: "admin_requires_owner" };
+
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 const RESET_REQUEST_MAX_AGE_SECONDS = 60 * 60 * 24;
 const APPROVED_RESET_MAX_AGE_SECONDS = 60 * 60;
@@ -206,6 +215,11 @@ export class SelfHostedAccountStore {
     return row ? this.byId(row.accountId) : null;
   }
 
+  /** Resolve the opaque play-token UUID to its current account privileges. */
+  accountById(id: string): SelfHostedAccount | null {
+    return this.byId(id);
+  }
+
   rename(accountId: string, username: string): SelfHostedAccount {
     const normalized = normalizeUsername(username);
     try {
@@ -237,16 +251,16 @@ export class SelfHostedAccountStore {
     if (!row || !passwordMatches(currentPassword, row.passwordHash)) {
       return false;
     }
-    this.setPassword(accountId, newPassword, true);
+    this.setPassword(accountId, newPassword, true, true);
     return true;
   }
 
-  requestPasswordReset(username: string): {
-    requestId: string;
-    recoveryToken: string;
-  } | null {
+  requestPasswordReset(username: string): PasswordResetRequestResult {
     const account = this.byNormalizedUsername(normalizeUsername(username));
-    if (!account) return null;
+    if (!account) return { outcome: "account_not_found" };
+    if (account.role === "admin") {
+      return { outcome: "admin_requires_owner" };
+    }
     const requestId = randomUUID();
     const recoveryToken = randomBytes(32).toString("base64url");
     const expiresAt =
@@ -278,7 +292,7 @@ export class SelfHostedAccountStore {
       this.database.exec("ROLLBACK");
       throw error;
     }
-    return { requestId, recoveryToken };
+    return { outcome: "created", requestId, recoveryToken };
   }
 
   passwordResetStatus(
@@ -305,9 +319,15 @@ export class SelfHostedAccountStore {
          SET status = ?, reviewed_by = ?, approved_at = CASE
            WHEN ? = 'approved' THEN CURRENT_TIMESTAMP ELSE NULL END,
            expires_at = ?, updated_at = CURRENT_TIMESTAMP
-         WHERE id = ? AND status = 'pending'`,
+         WHERE id = ? AND status = 'pending'
+           AND (
+             ? = 'rejected'
+             OR account_id IN (
+               SELECT id FROM self_hosted_accounts WHERE role = 'player'
+             )
+           )`,
       )
-      .run(decision, adminId, decision, expiresAt, requestId);
+      .run(decision, adminId, decision, expiresAt, requestId, decision);
     return result.changes === 1;
   }
 
@@ -362,12 +382,14 @@ export class SelfHostedAccountStore {
       ) as unknown as SelfHostedAdminAccount[];
     const resets = this.database
       .prepare(
-        `SELECT id, account_id AS accountId, username_snapshot AS username,
-           status, requested_at AS requestedAt, expires_at AS expiresAt,
-           approved_at AS approvedAt
-         FROM self_hosted_password_resets
-         WHERE status IN ('pending', 'approved')
-         ORDER BY requested_at ASC`,
+        `SELECT r.id, r.account_id AS accountId,
+           r.username_snapshot AS username, r.status,
+           r.requested_at AS requestedAt, r.expires_at AS expiresAt,
+           r.approved_at AS approvedAt
+         FROM self_hosted_password_resets r
+         INNER JOIN self_hosted_accounts a ON a.id = r.account_id
+         WHERE r.status IN ('pending', 'approved') AND a.role = 'player'
+         ORDER BY r.requested_at ASC`,
       )
       .all() as unknown as SelfHostedPasswordReset[];
     return { accounts, resets };
@@ -379,7 +401,7 @@ export class SelfHostedAccountStore {
   ): SelfHostedAccount | null {
     const account = this.byNormalizedUsername(normalizeUsername(username));
     if (!account) return null;
-    this.setPassword(account.id, newPassword, true);
+    this.setPassword(account.id, newPassword, true, true);
     return account;
   }
 
@@ -413,6 +435,7 @@ export class SelfHostedAccountStore {
     accountId: string,
     password: string,
     revokeSessions: boolean,
+    cancelPasswordResets = false,
   ): void {
     this.database
       .prepare(
@@ -423,6 +446,15 @@ export class SelfHostedAccountStore {
     if (revokeSessions) {
       this.database
         .prepare("DELETE FROM self_hosted_sessions WHERE account_id = ?")
+        .run(accountId);
+    }
+    if (cancelPasswordResets) {
+      this.database
+        .prepare(
+          `UPDATE self_hosted_password_resets
+           SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
+           WHERE account_id = ? AND status IN ('pending', 'approved')`,
+        )
         .run(accountId);
     }
   }
@@ -444,12 +476,13 @@ export class SelfHostedAccountStore {
     return (
       (this.database
         .prepare(
-          `SELECT id, account_id AS accountId,
-             username_snapshot AS username, status,
-             requested_at AS requestedAt, expires_at AS expiresAt,
-             approved_at AS approvedAt
-           FROM self_hosted_password_resets
-           WHERE id = ? AND token_hash = ?`,
+          `SELECT r.id, r.account_id AS accountId,
+             r.username_snapshot AS username, r.status,
+             r.requested_at AS requestedAt, r.expires_at AS expiresAt,
+             r.approved_at AS approvedAt
+           FROM self_hosted_password_resets r
+           INNER JOIN self_hosted_accounts a ON a.id = r.account_id
+           WHERE r.id = ? AND r.token_hash = ? AND a.role = 'player'`,
         )
         .get(requestId, sessionHash(recoveryToken)) as
         | SelfHostedPasswordReset

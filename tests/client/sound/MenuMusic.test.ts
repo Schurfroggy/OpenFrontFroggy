@@ -16,6 +16,7 @@ vi.mock("howler", () => {
     stop = vi.fn();
     unload = vi.fn();
     fade = vi.fn();
+    playing = vi.fn(() => false);
     volume = vi.fn(() => 0);
     _listeners = new Map<string, Set<() => void>>();
     once = vi.fn((event: string, cb: () => void) => {
@@ -96,7 +97,7 @@ afterEach(() => {
   for (const [type, fn] of registered) document.removeEventListener(type, fn);
 });
 
-const themes = () => howlInstances.filter((h) => h.src.includes("menu-theme"));
+const themes = () => howlInstances.filter((h) => h.src.includes("MainTitle"));
 
 /** Most recent volume the ramp wrote at this Howl. */
 const volumeWrites = (howl: any): number[] =>
@@ -118,9 +119,9 @@ describe("menu music", () => {
 
     const theme = themes()[0];
     expect(theme).toBeDefined();
-    expect(theme.loop).toBe(true);
+    expect(theme.loop).toBe(false);
     // 2.2 MB decoded up front is a wait landing exactly when the player has
-    // just clicked something, so this one streams like the gameplay track.
+    // just clicked something, so this remains an HTML5 stream.
     expect(theme.html5).toBe(true);
     expect(theme.play).toHaveBeenCalled();
   });
@@ -425,6 +426,20 @@ describe("menu music", () => {
     document.dispatchEvent(new Event("pointerdown"));
 
     expect(themes().length).toBe(1);
+  });
+
+  it("waits ten seconds before replaying MainTitle", () => {
+    vi.useFakeTimers();
+    startMenuMusic(mixer);
+    document.dispatchEvent(new Event("pointerdown"));
+    const theme = themes()[0];
+
+    theme._fire("end");
+    vi.advanceTimersByTime(9999);
+    expect(theme.play).toHaveBeenCalledTimes(1);
+
+    vi.advanceTimersByTime(1);
+    expect(theme.play).toHaveBeenCalledTimes(2);
   });
 
   it("can start again after a lobby is left before the game begins", () => {

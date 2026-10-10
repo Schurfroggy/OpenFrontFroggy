@@ -240,6 +240,9 @@ export interface PlayerUpdate {
   isAlive?: boolean;
   isDisconnected?: boolean;
   killedBy?: ClientID | null;
+  killedByName?: string | null;
+  killedByTeam?: Team | null;
+  killedByType?: PlayerType | null;
   deathPosition?: number | null;
   tilesOwned?: number;
   gold?: Gold;

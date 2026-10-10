@@ -1612,7 +1612,7 @@ export class GameImpl implements Game {
     // execution may never run again. Exclude the conquered player from the alive
     // count. PlayerExecution keeps the same stamp as a fallback for non-conquest
     // deaths; recordDeathPosition is first-write-wins, so this value sticks.
-    this.stats().recordKilledBy(conquered, conqueror.clientID());
+    this.stats().recordKilledBy(conquered, conqueror);
     this.stats().recordDeathPosition(
       conquered,
       this.players().filter(

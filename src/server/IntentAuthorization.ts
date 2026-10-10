@@ -179,6 +179,18 @@ export function authorizeIntent(
       }
       return null;
 
+    case "admin_set_outcome":
+      if (!actor.isAdmin || actor.isAdminBot) {
+        return {
+          status: 403,
+          error: "only an in-game administrator can set a test outcome",
+        };
+      }
+      if (!game.hasStarted) {
+        return { status: 409, error: "game not started" };
+      }
+      return null;
+
     default:
       // Gameplay intents: websocket players only.
       if (actor.isAdminBot) {

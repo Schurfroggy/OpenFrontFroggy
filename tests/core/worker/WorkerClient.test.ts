@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { WorkerClient } from "../../../src/core/worker/WorkerClient";
+import {
+  WorkerClient,
+  workerAssetBase,
+} from "../../../src/core/worker/WorkerClient";
 import type {
   PlayerActionsResultMessage,
   WorkerMessage,
@@ -128,5 +131,22 @@ describe("WorkerClient playerInteraction", () => {
     await vi.advanceTimersByTimeAsync(5000);
     await firstRejection;
     expect(internalClient.messageHandlers.size).toBe(0);
+  });
+});
+
+describe("workerAssetBase", () => {
+  it("uses the page origin when self-hosting has no CDN base", () => {
+    expect(workerAssetBase("", "http://124.222.245.42")).toBe(
+      "http://124.222.245.42",
+    );
+  });
+
+  it("keeps an explicitly configured CDN base", () => {
+    expect(
+      workerAssetBase(
+        "https://cdn.example.test/openfront",
+        "http://124.222.245.42",
+      ),
+    ).toBe("https://cdn.example.test/openfront");
   });
 });

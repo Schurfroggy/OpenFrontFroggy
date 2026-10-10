@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AllPlayersStats, ClientID } from "../Schemas";
+import { AllPlayersStats } from "../Schemas";
 import { snapshotType } from "../snapshot/SnapshotType";
 import {
   ALLIANCE_INDEX_BROKEN_BY_OTHER,
@@ -459,12 +459,16 @@ export class StatsImpl implements Stats {
     this._maxAlliance(player, ALLIANCE_INDEX_PEAK_CONCURRENT, allianceCount);
   }
 
-  recordKilledBy(victim: Player, killerClientID: ClientID | null): void {
+  recordKilledBy(victim: Player, killer: Player): void {
     const p = this._makePlayerStats(victim);
     if (p === undefined) return;
     // First write wins; `undefined` means unstamped, and `null` is a valid
     // recorded value (eliminated by a non-client killer).
-    if (p.killedBy === undefined) p.killedBy = killerClientID;
+    if (p.killedBy !== undefined) return;
+    p.killedBy = killer.clientID();
+    p.killedByName = killer.displayName();
+    p.killedByTeam = killer.team();
+    p.killedByType = killer.type();
   }
 
   recordDeathPosition(victim: Player, position: number): void {

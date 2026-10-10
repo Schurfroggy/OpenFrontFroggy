@@ -334,8 +334,16 @@ app.post("/api/self-hosted/password-reset/request", (req, res) => {
   const parsed = passwordResetRequestSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_input" });
   const request = accountStore().requestPasswordReset(parsed.data.username);
-  if (!request) return res.status(404).json({ error: "account_not_found" });
-  return res.status(201).json(request);
+  if (request.outcome === "account_not_found") {
+    return res.status(404).json({ error: "account_not_found" });
+  }
+  if (request.outcome === "admin_requires_owner") {
+    return res.status(403).json({ error: "admin_reset_requires_owner" });
+  }
+  return res.status(201).json({
+    requestId: request.requestId,
+    recoveryToken: request.recoveryToken,
+  });
 });
 
 app.post("/api/self-hosted/password-reset/status", (req, res) => {

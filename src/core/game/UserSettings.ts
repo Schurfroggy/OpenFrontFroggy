@@ -12,7 +12,6 @@ import {
 } from "../../client/StatsConstants";
 // DesktopShell.ts imports nothing, so this cannot introduce an import cycle
 // (verified with madge: 58 cycles before and after, none involving it).
-import { isDesktopShell } from "../../client/DesktopShell";
 import { Cosmetics } from "../CosmeticSchemas";
 import { PlayerPattern } from "../Schemas";
 
@@ -73,15 +72,7 @@ export type AudioCategory =
   | "interface";
 
 const AUDIO_DEFAULTS: Record<AudioCategory, number> = {
-  // Not 1.0, in answer to the "too loud on desktop" reports. perceptualGain
-  // squares the slider position, so the cut is twice what the number reads
-  // as: 0.9 is -0.9 dB on the handle and -1.8 dB by the time it is heard.
-  //
-  // Desktop is where it is felt, because that is the platform this default
-  // actually applies on (see defaultMasterVolume), but it is not a
-  // desktop-only value: it is also where the web carve-out lands a player
-  // who opts in, and the two should agree about how loud "default" is.
-  master: 0.9,
+  master: 1,
   music: 0.5,
   effects: 0.7,
   alerts: 0.8,
@@ -129,14 +120,8 @@ const AUDIO_RESET_KEYS: readonly string[] = [
 /**
  * Bumped to force every existing player back to the platform defaults once.
  *
- * Version 1 is the new audio delivery itself. The read-through in
- * audioVolume() below was meant to carry an existing player's two old sliders
- * across, but it only carries the channels those sliders covered: a player who
- * had ever dragged ONE of them stored a key, which satisfies the master
- * carve-out in defaultMasterVolume() -- so master resolves to audible -- while
- * the four channels the other slider never covered fall through to the new
- * defaults. That is a web player who opted into music years ago now hearing
- * the entire new cue layer at full level, having opted into none of it.
+ * Version 1 is the new audio delivery itself. It clears the partial legacy
+ * two-slider state once so all six channels begin from a coherent baseline.
  *
  * A reset rather than a narrower rule because the stored state cannot say
  * which it is: "dragged the music slider and left effects alone" and "dragged
@@ -150,13 +135,6 @@ const AUDIO_RESET_KEYS: readonly string[] = [
  */
 const AUDIO_RESET_VERSION = 1;
 const AUDIO_RESET_VERSION_KEY = "settings.audio.resetVersion";
-
-/** Every key that means "this player has chosen an audio volume before". */
-const AUDIO_VOLUME_KEYS: readonly string[] = [
-  "settings.backgroundMusicVolume",
-  "settings.soundEffectsVolume",
-  ...AUDIO_CHANNELS.map((category) => `settings.audio.${category}`),
-];
 
 const AUDIO_LEGACY_KEY: Partial<Record<AudioCategory, string>> = {
   music: "settings.backgroundMusicVolume",
@@ -844,38 +822,9 @@ export class UserSettings {
    * the only writer is a slider drag, so 0 is always a deliberate choice and
    * never means "unset".
    */
-  /**
-   * What master falls back to with nothing stored for it.
-   *
-   * The desktop shell is a game the player deliberately launched, so it starts
-   * audible. The web build starts silent, matching main today — both of the
-   * old sliders defaulted to 0, and audio that starts by itself on the web is
-   * bad manners besides.
-   *
-   * The carve-out: master has no legacy key of its own, so defaulting it to 0
-   * would silence a returning player who had deliberately set the old
-   * sliders. If any audio value is stored at all, master falls back to
-   * AUDIO_DEFAULTS.master and that player keeps hearing what they chose.
-   *
-   * Named rather than quoted, here and in setAudioVolume below, so the two
-   * cannot drift apart the next time the default moves.
-   */
-  private defaultMasterVolume(): number {
-    if (isDesktopShell()) return AUDIO_DEFAULTS.master;
-    const chosenBefore = AUDIO_VOLUME_KEYS.some(
-      (key) => this.getCached(key) !== null,
-    );
-    return chosenBefore ? AUDIO_DEFAULTS.master : 0;
-  }
-
   audioVolume(category: AudioCategory): number {
     const legacyKey = AUDIO_LEGACY_KEY[category];
-    // Only master is platform-dependent; every channel default is the same
-    // everywhere, and the mixer is identical on both.
-    const base =
-      category === "master"
-        ? this.defaultMasterVolume()
-        : AUDIO_DEFAULTS[category];
+    const base = AUDIO_DEFAULTS[category];
     const fallback =
       legacyKey === undefined ? base : this.getFloat(legacyKey, base);
     // Clamp on read as well as on write: the legacy keys were never bounded,
@@ -884,20 +833,7 @@ export class UserSettings {
   }
 
   setAudioVolume(category: AudioCategory, volume: number): void {
-    // Writing any channel can flip the web master carve-out from 0 to
-    // AUDIO_DEFAULTS.master (see defaultMasterVolume): the player now has a
-    // stored audio value. Nothing else would announce that, so the mixer
-    // would sit at master 0 — a silent game — while the tab showed the
-    // default.
-    const masterBefore = this.audioVolume("master");
     this.setFloat(`settings.audio.${category}`, clampVolume(volume));
-    if (category === "master") return;
-    // A stored master is authoritative; the carve-out cannot apply.
-    if (this.getCached("settings.audio.master") !== null) return;
-    const masterAfter = this.audioVolume("master");
-    if (masterAfter !== masterBefore) {
-      this.emitChange("settings.audio.master", String(masterAfter));
-    }
   }
 
   muteOnBlur(): boolean {

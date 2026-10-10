@@ -12,7 +12,11 @@ import { crazyGamesSDK } from "../../CrazyGamesSDK";
 import { isDesktopShell } from "../../DesktopShell";
 import { showInGameAlert, showInGameConfirm } from "../../InGameModal";
 import { TogglePauseIntentEvent } from "../../InputHandler";
-import { PauseGameIntentEvent, SendWinnerEvent } from "../../Transport";
+import {
+  PauseGameIntentEvent,
+  SendAdminSetOutcomeIntentEvent,
+  SendWinnerEvent,
+} from "../../Transport";
 import { homeHref, showToast, translateText } from "../../Utils";
 import { GameView } from "../../view";
 import { ImmunityBarVisibleEvent } from "./ImmunityTimer";
@@ -27,6 +31,8 @@ const newLobbyIcon = assetUrl("images/ReplayRegularIconWhite.svg");
 const settingsIcon = assetUrl("images/SettingIconWhite.svg");
 const fullscreenIcon = assetUrl("images/FullscreenIconWhite.svg");
 const exitFullscreenIcon = assetUrl("images/ExitFullscreenIconWhite.svg");
+const adminVictoryIcon = assetUrl("images/CrownIcon.svg");
+const adminDefeatIcon = assetUrl("images/DoomsdayClockSkull.svg");
 
 const LAST_MINUTE_SECONDS = 60;
 const FLASH_TIMER_SECONDS = 30;
@@ -70,6 +76,13 @@ export class GameRightSidebar extends LitElement implements Controller {
   private newLobbyRequested = false;
   private spawnBarVisible = false;
   private immunityBarVisible = false;
+  private isAdmin = false;
+  private adminOutcomeRequested = false;
+
+  setRole(role: string | null | undefined): void {
+    this.isAdmin = role === "admin" || role === "root";
+    this.requestUpdate();
+  }
 
   createRenderRoot() {
     // Stack the timer bar + doomsday-clock readout, centers aligned (the narrower
@@ -287,6 +300,20 @@ export class GameRightSidebar extends LitElement implements Controller {
     );
   }
 
+  private onAdminOutcomeClick(outcome: "victory" | "defeat"): void {
+    if (
+      this.adminOutcomeRequested ||
+      this.hasWinner ||
+      this.game.inSpawnPhase() ||
+      !this.game.myPlayer()?.isAlive()
+    ) {
+      return;
+    }
+    this.adminOutcomeRequested = true;
+    this.eventBus.emit(new SendAdminSetOutcomeIntentEvent(outcome));
+    this.requestUpdate();
+  }
+
   private onFullscreenButtonClick() {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch((err) => {
@@ -374,6 +401,7 @@ export class GameRightSidebar extends LitElement implements Controller {
 
         <!-- Buttons -->
         ${this.maybeRenderReplayButtons()}
+        ${this.maybeRenderAdminOutcomeButtons()}
 
         <div class="cursor-pointer" @click=${this.onSettingsButtonClick}>
           <img
@@ -478,6 +506,46 @@ export class GameRightSidebar extends LitElement implements Controller {
             </div>
           `
         : ""}
+    `;
+  }
+
+  private maybeRenderAdminOutcomeButtons() {
+    if (
+      !this.isAdmin ||
+      this.game.config().isReplay() ||
+      this.game.inSpawnPhase() ||
+      this.hasWinner ||
+      !this.game.myPlayer()?.isAlive()
+    ) {
+      return html``;
+    }
+
+    const disabledClass = this.adminOutcomeRequested
+      ? "opacity-50 pointer-events-none"
+      : "";
+    return html`
+      <div class="h-5 w-px bg-white/25" aria-hidden="true"></div>
+      <button
+        data-admin-outcome="victory"
+        class=${`flex h-7 w-7 cursor-pointer items-center justify-center rounded bg-emerald-600 transition hover:bg-emerald-500 ${disabledClass}`}
+        title=${translateText("win_modal.admin_force_victory")}
+        aria-label=${translateText("win_modal.admin_force_victory")}
+        ?disabled=${this.adminOutcomeRequested}
+        @click=${() => this.onAdminOutcomeClick("victory")}
+      >
+        <img src=${adminVictoryIcon} alt="" width="18" height="18" />
+      </button>
+      <button
+        data-admin-outcome="defeat"
+        class=${`flex h-7 w-7 cursor-pointer items-center justify-center rounded bg-red-700 transition hover:bg-red-600 ${disabledClass}`}
+        title=${translateText("win_modal.admin_force_defeat")}
+        aria-label=${translateText("win_modal.admin_force_defeat")}
+        ?disabled=${this.adminOutcomeRequested}
+        @click=${() => this.onAdminOutcomeClick("defeat")}
+      >
+        <img src=${adminDefeatIcon} alt="" width="18" height="18" />
+      </button>
+      <div class="h-5 w-px bg-white/25" aria-hidden="true"></div>
     `;
   }
 }

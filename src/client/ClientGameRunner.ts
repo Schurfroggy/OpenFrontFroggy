@@ -1,6 +1,10 @@
 import { Config } from "src/core/configuration/Config";
 import { ClientEnv } from "../client/ClientEnv";
-import { reloadForUpdate, translateText } from "../client/Utils";
+import {
+  copyToClipboard,
+  reloadForUpdate,
+  translateText,
+} from "../client/Utils";
 import { EventBus } from "../core/EventBus";
 import {
   ClientID,
@@ -733,6 +737,7 @@ async function createClientGame(
   const soundManager = new SoundManager(
     eventBus,
     audioMixer() ?? initAudioMixer(userSettings),
+    () => gameView.elapsedGameSeconds(),
   );
   try {
     // Resolve render settings (defaults + user overrides) up front so the
@@ -1637,7 +1642,7 @@ function showErrorModal(
   button.className = "copy-btn";
   button.addEventListener("click", async () => {
     try {
-      await navigator.clipboard.writeText(content);
+      await copyToClipboard(content);
       button.textContent = translateText("common.copied");
     } catch {
       button.textContent = translateText("common.failed_copy");

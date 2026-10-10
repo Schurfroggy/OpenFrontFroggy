@@ -9,6 +9,7 @@ import {
 import { CloseCode, CloseReason } from "../core/CloseCodes";
 import { GameEnv } from "../core/configuration/Config";
 import { PersistentIdSchema } from "../core/Schemas";
+import { SelfHostedAccountStore } from "./SelfHostedAccountStore";
 import { ServerEnv } from "./ServerEnv";
 
 type TokenVerificationResult =
@@ -19,11 +20,39 @@ type TokenVerificationResult =
     }
   | { type: "error"; message: string };
 
+let selfHostedAccounts: SelfHostedAccountStore | null = null;
+
+function selfHostedAccountStore(): SelfHostedAccountStore {
+  selfHostedAccounts ??= new SelfHostedAccountStore();
+  return selfHostedAccounts;
+}
+
 export async function verifyClientToken(
   token: string,
 ): Promise<TokenVerificationResult> {
   if (PersistentIdSchema.safeParse(token).success) {
-    if (ServerEnv.env() === GameEnv.Dev || ServerEnv.selfHosted()) {
+    if (ServerEnv.selfHosted()) {
+      const account = selfHostedAccountStore().accountById(token);
+      if (account !== null) {
+        const now = Math.floor(Date.now() / 1000);
+        return {
+          type: "success",
+          persistentId: token,
+          claims: {
+            jti: `self-hosted:${account.id}`,
+            sub: account.id,
+            iat: now,
+            iss: "self-hosted",
+            aud: "self-hosted",
+            exp: now + 60 * 60,
+            role: account.role,
+            provider: "self-hosted",
+          },
+        };
+      }
+      return { type: "success", persistentId: token, claims: null };
+    }
+    if (ServerEnv.env() === GameEnv.Dev) {
       return { type: "success", persistentId: token, claims: null };
     } else {
       return {

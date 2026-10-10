@@ -1,4 +1,4 @@
-import { AllPlayersStats, ClientID } from "../Schemas";
+import { AllPlayersStats } from "../Schemas";
 import {
   BoatUnitType,
   NukeType,
@@ -148,9 +148,10 @@ export interface Stats {
   // player was killed (0 tiles)
   playerKilled(player: Player, tick: number): void;
 
-  // OFM live standings: who eliminated the player (null = non-client killer) and
-  // their finishing place. Both first-write-wins.
-  recordKilledBy(victim: Player, killerClientID: ClientID | null): void;
+  // OFM live standings and the defeat report. The legacy client ID remains
+  // null for nations/bots; the full killer identity is retained alongside it.
+  // Attribution and finishing place are both first-write-wins.
+  recordKilledBy(victim: Player, killer: Player): void;
   recordDeathPosition(victim: Player, position: number): void;
 
   // Record tiles owned at game end (final standings).

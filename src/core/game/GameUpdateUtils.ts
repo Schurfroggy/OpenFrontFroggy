@@ -47,6 +47,9 @@ export function diffPlayerUpdate(
     prev.isAlive === next.isAlive &&
     prev.isDisconnected === next.isDisconnected &&
     prev.killedBy === next.killedBy &&
+    prev.killedByName === next.killedByName &&
+    prev.killedByTeam === next.killedByTeam &&
+    prev.killedByType === next.killedByType &&
     prev.deathPosition === next.deathPosition &&
     prev.tradeGold === next.tradeGold &&
     prev.trainGold === next.trainGold &&
@@ -100,6 +103,9 @@ export function diffPlayerUpdate(
   setIfDifferent("isAlive", prev.isAlive === next.isAlive);
   setIfDifferent("isDisconnected", prev.isDisconnected === next.isDisconnected);
   setIfDifferent("killedBy", prev.killedBy === next.killedBy);
+  setIfDifferent("killedByName", prev.killedByName === next.killedByName);
+  setIfDifferent("killedByTeam", prev.killedByTeam === next.killedByTeam);
+  setIfDifferent("killedByType", prev.killedByType === next.killedByType);
   setIfDifferent("deathPosition", prev.deathPosition === next.deathPosition);
   setIfDifferent("tradeGold", prev.tradeGold === next.tradeGold);
   setIfDifferent("trainGold", prev.trainGold === next.trainGold);

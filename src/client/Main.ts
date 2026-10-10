@@ -99,6 +99,7 @@ import {
   withGroupToken,
 } from "./PresenceGroup";
 import { RewardsModal } from "./RewardsModal";
+import { loadSelfHostedAccount } from "./SelfHostedAccount";
 import "./SelfHostedAccountModal";
 import "./SelfHostedAdminModal";
 import {
@@ -1565,7 +1566,18 @@ class Client {
       void userAuth();
     }
     const auth = await userAuth(!isSingleplayer);
-    const playerRole = auth !== false ? (auth.claims.role ?? null) : null;
+    // Self-hosted accounts use a local cookie/session rather than the
+    // upstream JWT read by userAuth(). Read the same account record that
+    // powers the My/Admin tabs so its role also reaches the in-game HUD.
+    const selfHostedAccount = ClientEnv.selfHosted()
+      ? await loadSelfHostedAccount()
+      : null;
+    const playerRole =
+      selfHostedAccount?.role === "admin"
+        ? "admin"
+        : auth !== false
+          ? (auth.claims.role ?? null)
+          : null;
     // Ensure the one-shot Steam name-seed has settled before reading
     // getUsername(), mirroring how getClanCheck() runs in parallel with the
     // handshake. whenSeeded() always resolves (falling back to the generated

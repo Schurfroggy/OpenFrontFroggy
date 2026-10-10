@@ -6,6 +6,7 @@ import {
   loadSelfHostedAccount,
   loadSelfHostedAdminOverview,
 } from "../SelfHostedAccount";
+import { translateText } from "../Utils";
 import "./NavAccountMenu";
 import { NavNotificationsController } from "./NavNotificationsController";
 import "./NavUtilityIcons";
@@ -120,7 +121,7 @@ export class DesktopNavBar extends LitElement {
                 : ""} text-white/70 hover:text-malibu-blue font-medium tracking-wider uppercase cursor-pointer transition-colors [&.active]:text-malibu-blue"
               data-page="page-self-hosted-admin"
             >
-              <span data-i18n="main.admin"></span>
+              <span>${translateText("main.admin")}</span>
               ${this.pendingResets > 0
                 ? html`<span
                     class="absolute -right-3 -top-2 flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] leading-5 text-white"

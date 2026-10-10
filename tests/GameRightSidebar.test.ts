@@ -1,5 +1,8 @@
 import { GameRightSidebar } from "../src/client/hud/layers/GameRightSidebar";
-import { SendWinnerEvent } from "../src/client/Transport";
+import {
+  SendAdminSetOutcomeIntentEvent,
+  SendWinnerEvent,
+} from "../src/client/Transport";
 import type { GameView } from "../src/client/view";
 import { EventBus } from "../src/core/EventBus";
 import { GameType } from "../src/core/game/Game";
@@ -54,7 +57,7 @@ function createSidebar(overrides: Partial<TimerState> = {}) {
     }),
     elapsedGameSeconds: () => state.elapsedSeconds,
     inSpawnPhase: () => state.inSpawnPhase,
-    myPlayer: () => undefined,
+    myPlayer: () => ({ isAlive: () => true, isLobbyCreator: () => false }),
     ticks: () => state.ticks,
   } as unknown as GameView;
 
@@ -199,5 +202,42 @@ describe("GameRightSidebar end timer warnings", () => {
       "game-end-timer-sidebar-flash",
     );
     expect(toasts).toHaveLength(0);
+  });
+});
+
+describe("GameRightSidebar administrator outcome controls", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("does not expose the controls to a normal player", async () => {
+    const { sidebar } = createSidebar();
+    sidebar.setRole(null);
+    await sidebar.updateComplete;
+
+    expect(sidebar.querySelectorAll("[data-admin-outcome]")).toHaveLength(0);
+  });
+
+  it("emits a single synchronized victory request for an administrator", async () => {
+    const { sidebar, eventBus } = createSidebar();
+    const outcomes: string[] = [];
+    eventBus.on(SendAdminSetOutcomeIntentEvent, (event) => {
+      outcomes.push(event.outcome);
+    });
+    sidebar.setRole("admin");
+    await sidebar.updateComplete;
+
+    const victoryButton = sidebar.querySelector<HTMLButtonElement>(
+      '[data-admin-outcome="victory"]',
+    );
+    expect(victoryButton).not.toBeNull();
+    expect(
+      sidebar.querySelector('[data-admin-outcome="defeat"]'),
+    ).not.toBeNull();
+
+    victoryButton!.click();
+    victoryButton!.click();
+
+    expect(outcomes).toEqual(["victory"]);
   });
 });

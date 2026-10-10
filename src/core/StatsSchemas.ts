@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { zb, ZbEncodeError } from "../../zbin";
-import { UnitType } from "./game/Game";
+import { PlayerType, UnitType } from "./game/Game";
 
 export const bombUnits = ["abomb", "hbomb", "mirv", "mirvw"] as const;
 export const BombUnitSchema = z.enum(bombUnits);
@@ -196,6 +196,14 @@ export const PlayerStatsSchema = z
     // so compact games index a smaller map). Last write wins: a player may
     // re-pick during the spawn phase.
     spawnTile: zb.uint().optional(),
+    // Appended killer identity fields. `killedBy` remains the human client ID
+    // used by standings; these fields also identify nations and bots, which do
+    // not have a client ID, for the immediate defeat report.
+    killedByName: z.string().optional(),
+    killedByTeam: z.string().nullable().optional(),
+    killedByType: z
+      .enum([PlayerType.Human, PlayerType.Nation, PlayerType.Bot])
+      .optional(),
   })
   .optional();
 export type PlayerStats = z.infer<typeof PlayerStatsSchema>;

@@ -301,10 +301,10 @@ describe("user-setting audio tab", () => {
   });
 
   it("blames master, not the channel, when master is the blocker", async () => {
-    // A fresh web install: master 0, every channel at its non-zero default.
-    // isAudible gates on master first, so all three would otherwise tell the
-    // player to turn up a slider that is already up — and there is no Test
-    // button on the master row to act on.
+    // An explicitly muted master with non-zero channels. isAudible gates on
+    // master first, so all three would otherwise tell the player to turn up a
+    // slider that is already up — and there is no Test button on the master
+    // row to act on.
     setAudioControls(stubControls({ audible: false }));
     const el = await mountAudioTab();
 
@@ -379,8 +379,7 @@ describe("user-setting audio tab", () => {
       ).value;
     expect(sliderValue("music")).toBe(50);
     expect(sliderValue("effects")).toBe(70);
-    // Web, and nothing stored any more, so master is silent.
-    expect(sliderValue("master")).toBe(0);
+    expect(sliderValue("master")).toBe(100);
     expect(checkbox(el, "audio-mute-on-blur-toggle").checked).toBe(false);
   });
 

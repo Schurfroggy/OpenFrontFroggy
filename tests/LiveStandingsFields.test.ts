@@ -25,6 +25,8 @@ describe("OFM live standings fields", () => {
 
     const stats = game.stats().getPlayerStats(victim);
     expect(stats?.killedBy).toBe("conqueror_client");
+    expect(stats?.killedByName).toBe("conqueror");
+    expect(stats?.killedByType).toBe(PlayerType.Human);
     expect(typeof stats?.deathPosition).toBe("number");
   });
 
@@ -39,19 +41,19 @@ describe("OFM live standings fields", () => {
     expect(typeof update?.deathPosition).toBe("number");
   });
 
-  test("a non-client killer records killedBy as null (not unstamped)", () => {
-    // A conqueror with no clientID (e.g. a bot/nation): killedBy is a recorded
-    // null, distinct from the alive/unstamped case (also null, see below).
-    game.addPlayer(
-      new PlayerInfo("botkiller", PlayerType.Bot, null, "botkiller"),
-    );
-    const killer = game.player("botkiller");
+  test("an AI nation killer retains its display identity without a client ID", () => {
+    // Nations have no client ID, but the defeat report still needs their name
+    // and type rather than collapsing every non-client killer into "unknown".
+    game.addPlayer(new PlayerInfo("France", PlayerType.Nation, null, "france"));
+    const killer = game.player("france");
     const victim = addHuman("victim2", "victim2_client");
 
     game.conquerPlayer(killer, victim);
 
     const update = victim.toUpdate();
     expect(update?.killedBy).toBeNull();
+    expect(update?.killedByName).toBe("France");
+    expect(update?.killedByType).toBe(PlayerType.Nation);
     expect(typeof update?.deathPosition).toBe("number");
   });
 

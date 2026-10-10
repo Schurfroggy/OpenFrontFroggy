@@ -84,6 +84,9 @@ export class PlaySoundEffectEvent implements GameEvent {
   constructor(public readonly effect: SoundEffect) {}
 }
 
+/** Starts the dedicated victory music for the local winner. */
+export class PlayVictoryMusicEvent implements GameEvent {}
+
 /**
  * Mixer channel a cue plays on. "master" is the global trim and "music" is
  * owned by the two looping tracks, so neither is ever a cue's channel.

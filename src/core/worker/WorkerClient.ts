@@ -25,6 +25,19 @@ async function createGameWorker(): Promise<Worker> {
   return new GameWorker();
 }
 
+/**
+ * Inline workers run from a `blob:` URL. Unlike a normal page or a worker
+ * loaded from an HTTP URL, `fetch("/_assets/...")` inside that blob has no
+ * HTTP origin against which the root-relative URL can be resolved. Official
+ * deployments provide an absolute CDN base, but a self-hosted deployment
+ * intentionally leaves it empty so page assets use the current origin.
+ * Pass the page origin to the worker in that case so its map requests are
+ * absolute as well.
+ */
+export function workerAssetBase(cdnBase: string, pageOrigin: string): string {
+  return cdnBase === "" ? pageOrigin : cdnBase;
+}
+
 export class WorkerClient {
   private worker: Worker | null = null;
   private isInitialized = false;
@@ -95,7 +108,7 @@ export class WorkerClient {
         id: messageId,
         gameStartInfo: this.gameStartInfo,
         clientID: this.clientID,
-        cdnBase: getCdnBase(),
+        cdnBase: workerAssetBase(getCdnBase(), window.location.origin),
         snapshot: this.snapshotToRestore,
       });
 

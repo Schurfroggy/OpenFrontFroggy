@@ -232,6 +232,10 @@ export class SendToggleGameStartTimer implements GameEvent {
   constructor() {}
 }
 
+export class SendAdminSetOutcomeIntentEvent implements GameEvent {
+  constructor(public readonly outcome: "victory" | "defeat") {}
+}
+
 // Switch between playing and watching from the lobby screen.
 export class SendSpectateEvent implements GameEvent {
   constructor(public readonly spectator: boolean) {}
@@ -376,6 +380,9 @@ export class Transport {
 
     this.subscribe(SendToggleGameStartTimer, (e) =>
       this.onSendToggleGameStartTimer(e),
+    );
+    this.subscribe(SendAdminSetOutcomeIntentEvent, (e) =>
+      this.onSendAdminSetOutcomeIntent(e),
     );
     this.subscribe(SendSpectateEvent, (e) => {
       this.lobbyConfig.spectator = e.spectator;
@@ -1029,6 +1036,10 @@ export class Transport {
 
   private onSendToggleGameStartTimer(event: SendToggleGameStartTimer) {
     this.sendIntent({ type: "toggle_game_start_timer" });
+  }
+
+  private onSendAdminSetOutcomeIntent(event: SendAdminSetOutcomeIntentEvent) {
+    this.sendIntent({ type: "admin_set_outcome", outcome: event.outcome });
   }
 
   private sendIntent(intent: Intent) {

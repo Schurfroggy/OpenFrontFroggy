@@ -41,6 +41,10 @@ const config = (c: Partial<GameConfig>): Intent => ({
 });
 const timer: Intent = { type: "toggle_game_start_timer" };
 const pause: Intent = { type: "toggle_pause", paused: true };
+const adminVictory: Intent = {
+  type: "admin_set_outcome",
+  outcome: "victory",
+};
 const spawn: Intent = { type: "spawn", tile: 1 };
 const chooseOwnTeam: Intent = {
   type: "set_player_team",
@@ -212,6 +216,36 @@ describe("authorizeIntent", () => {
       null,
     ],
     ["pause before the start", pause, host, lobby(), 409],
+
+    [
+      "test outcome by a player",
+      adminVictory,
+      player,
+      lobby({ hasStarted: true }),
+      403,
+    ],
+    [
+      "test outcome by the host without admin role",
+      adminVictory,
+      host,
+      lobby({ hasStarted: true }),
+      403,
+    ],
+    ["test outcome before the start", adminVictory, admin, lobby(), 409],
+    [
+      "test outcome by an in-game admin",
+      adminVictory,
+      admin,
+      lobby({ hasStarted: true }),
+      null,
+    ],
+    [
+      "test outcome by the admin bot",
+      adminVictory,
+      bot,
+      lobby({ hasStarted: true }),
+      403,
+    ],
 
     ["team choice by the host", moveOtherPlayer, host, lobby(), null],
     [

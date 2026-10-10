@@ -103,11 +103,20 @@ describe("diffPlayerUpdate", () => {
     expect(diff.nationFlag).toBe("pk");
   });
 
-  it("emits killedBy + deathPosition when a player is eliminated", () => {
+  it("emits killer identity + deathPosition when a player is eliminated", () => {
     const prev = makePlayerUpdate({ killedBy: null, deathPosition: null });
-    const next = makePlayerUpdate({ killedBy: "client-b", deathPosition: 3 });
+    const next = makePlayerUpdate({
+      killedBy: "client-b",
+      killedByName: "Player B",
+      killedByTeam: "Blue",
+      killedByType: PlayerType.Human,
+      deathPosition: 3,
+    });
     const diff = diffPlayerUpdate(prev, next)!;
     expect(diff.killedBy).toBe("client-b");
+    expect(diff.killedByName).toBe("Player B");
+    expect(diff.killedByTeam).toBe("Blue");
+    expect(diff.killedByType).toBe(PlayerType.Human);
     expect(diff.deathPosition).toBe(3);
   });
 

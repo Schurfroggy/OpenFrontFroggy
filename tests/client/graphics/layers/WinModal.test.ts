@@ -1,13 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  fetchCosmetics,
-  resolveCosmetics,
-  type ResolvedCosmetic,
-} from "../../../../src/client/Cosmetics";
-import type { PurchaseButton } from "../../../../src/client/components/PurchaseButton";
 import "../../../../src/client/hud/layers/WinModal";
 import type { WinModal } from "../../../../src/client/hud/layers/WinModal";
-import { RankedType } from "../../../../src/core/game/Game";
+import { GameMode, RankedType } from "../../../../src/core/game/Game";
 
 vi.mock("../../../../src/client/Utils", () => ({
   translateText: vi.fn((key: string) => {
@@ -19,21 +13,10 @@ vi.mock("../../../../src/client/Utils", () => ({
     };
     return translations[key] || key;
   }),
-  getGamesPlayed: vi.fn(() => 10),
-  isInIframe: vi.fn(() => false),
-  TUTORIAL_VIDEO_URL: "https://example.com/tutorial",
-}));
-
-vi.mock("../../../../src/client/Api", () => ({
-  getUserMe: vi.fn(async () => null),
-}));
-
-vi.mock("../../../../src/client/Cosmetics", async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import("../../../../src/client/Cosmetics")
-  >()),
-  fetchCosmetics: vi.fn(async () => null),
-  resolveCosmetics: vi.fn(() => []),
+  homeHref: vi.fn(() => "/"),
+  renderDuration: vi.fn((seconds: number) => `${seconds}s`),
+  renderNumber: vi.fn((value: number | bigint) => String(value)),
+  renderTroops: vi.fn((value: number) => String(value)),
 }));
 
 vi.mock("../../../../src/client/CrazyGamesSDK", () => ({
@@ -126,7 +109,7 @@ describe("WinModal Requeue", () => {
   });
 });
 
-describe("WinModal pattern promotion", () => {
+describe("WinModal settlement report", () => {
   let modal: WinModal | undefined;
 
   afterEach(() => {
@@ -134,81 +117,57 @@ describe("WinModal pattern promotion", () => {
     modal = undefined;
   });
 
-  it("renders three card-and-purchase promotions from four purchasable patterns", async () => {
-    const purchasablePatterns: ResolvedCosmetic[] = [
-      "aurora",
-      "blaze",
-      "circuit",
-      "dawn",
-    ].map((name) => ({
-      type: "pattern",
-      cosmetic: {
-        name,
-        pattern: "AAAAAA",
-        product: null,
-        priceHard: 120,
-        rarity: "rare",
-      } as never,
-      colorPalette: null,
-      relationship: "purchasable",
-      key: `pattern:${name}`,
-    }));
-    vi.mocked(fetchCosmetics).mockResolvedValue(null);
-    vi.mocked(resolveCosmetics).mockReturnValue(purchasablePatterns);
-
+  it("renders the three defeat summary entries without promotions", async () => {
     modal = document.createElement("win-modal") as WinModal;
-    Object.assign(modal as unknown as { rand: number; isWin: boolean }, {
-      rand: 0.75,
-      isWin: true,
-    });
     document.body.appendChild(modal);
     await modal.updateComplete;
 
-    await modal.loadPatternContent();
-    modal.requestUpdate();
-    await modal.updateComplete;
-
-    const promotions = modal.querySelectorAll("[data-win-cosmetic-promo]");
-    expect(promotions).toHaveLength(3);
-    expect(modal.querySelectorAll("cosmetic-card")).toHaveLength(3);
-    expect(modal.querySelectorAll("purchase-button")).toHaveLength(3);
-    for (const button of modal.querySelectorAll<PurchaseButton>(
-      "purchase-button",
-    )) {
-      expect(button.rarity).toBe("rare");
-    }
-    for (const card of modal.querySelectorAll("cosmetic-card")) {
-      expect(card.querySelector("[data-cosmetic-main]")?.tagName).toBe("DIV");
-      expect(card.querySelectorAll("button")).toHaveLength(0);
-    }
-    const legacyButtonTag = ["cosmetic", "button"].join("-");
-    const legacyContainerTag = ["cosmetic", "container"].join("-");
-    expect(modal.querySelectorAll(legacyButtonTag)).toHaveLength(0);
-    expect(modal.querySelectorAll(legacyContainerTag)).toHaveLength(0);
+    const text = modal.textContent ?? "";
+    expect(text).toContain("win_modal.stats.final_place");
+    expect(text).toContain("win_modal.stats.survival_time");
+    expect(text).toContain("win_modal.stats.defeated_by");
+    expect(modal.querySelector("steam-wishlist")).toBeNull();
+    expect(modal.querySelector("cosmetic-card")).toBeNull();
   });
 
-  it("drops the ad-free pitch in the desktop shell, which has no ads", async () => {
-    const render = async () => {
-      modal = document.createElement("win-modal") as WinModal;
-      Object.assign(modal as unknown as { rand: number; isWin: boolean }, {
-        rand: 0.75,
+  it("renders victory summary, construction, warships, and economy", async () => {
+    modal = document.createElement("win-modal") as WinModal;
+    modal.game = {
+      config: () => ({ gameConfig: () => ({ gameMode: GameMode.FFA }) }),
+      numLandTiles: () => 1000,
+      numTilesWithFallout: () => 0,
+      myPlayer: () => ({ team: () => null, isAlive: () => true }),
+      playerViews: () => [],
+    } as never;
+    Object.assign(
+      modal as unknown as {
+        isWin: boolean;
+        resultDurationSeconds: number;
+        resultStats: object;
+      },
+      {
         isWin: true,
-      });
-      document.body.appendChild(modal);
-      await modal.updateComplete;
-      return modal.textContent ?? "";
-    };
+        resultDurationSeconds: 600,
+        resultStats: {
+          finalTiles: 600n,
+          tiles: [700n],
+          peakTroops: 1_000_000n,
+          attacks: [2_000_000n],
+          conquests: [0n, 4n],
+          units: { city: [3n], wshp: [2n] },
+          gold: [100n, 50n, 25n, 10n, 5n, 5n, 5n],
+        },
+      },
+    );
+    document.body.appendChild(modal);
+    await modal.updateComplete;
 
-    expect(await render()).toContain("win_modal.territory_pattern");
-    modal?.remove();
-
-    window.openfrontDesktop = {};
-    try {
-      const text = await render();
-      expect(text).toContain("win_modal.support_openfront");
-      expect(text).not.toContain("win_modal.territory_pattern");
-    } finally {
-      delete window.openfrontDesktop;
-    }
+    const text = modal.textContent ?? "";
+    expect(text).toContain("win_modal.stats.match_duration");
+    expect(text).toContain("win_modal.stats.final_territory");
+    expect(text).toContain("win_modal.stats.warships_built");
+    expect(text).toContain("win_modal.stats.construction");
+    expect(text).toContain("win_modal.stats.economy");
+    expect(modal.querySelectorAll("img").length).toBeGreaterThan(10);
   });
 });

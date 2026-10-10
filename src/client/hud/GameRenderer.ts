@@ -184,6 +184,7 @@ export function createRenderer(
   }
   gameRightSidebar.game = game;
   gameRightSidebar.eventBus = eventBus;
+  gameRightSidebar.setRole(playerRole);
 
   const settingsModal = document.querySelector(
     "settings-modal",

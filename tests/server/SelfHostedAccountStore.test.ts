@@ -26,6 +26,12 @@ describe("SelfHostedAccountStore", () => {
     expect(accounts.accountForSession(registered.sessionToken)).toEqual(
       registered.account,
     );
+    expect(accounts.accountById(registered.account.id)).toEqual(
+      registered.account,
+    );
+    expect(
+      accounts.accountById("00000000-0000-0000-0000-000000000000"),
+    ).toBeNull();
     expect(accounts.accountForSession("wrong-token")).toBeNull();
   });
 
@@ -83,7 +89,9 @@ describe("SelfHostedAccountStore", () => {
     const accounts = store();
     const admin = accounts.register("Froggy", "password-one");
     const player = accounts.register("Alice", "password-two");
-    const request = accounts.requestPasswordReset("alice")!;
+    const request = accounts.requestPasswordReset("alice");
+    expect(request.outcome).toBe("created");
+    if (request.outcome !== "created") throw new Error("request not created");
 
     expect(
       accounts.passwordResetStatus(request.requestId, request.recoveryToken)
@@ -121,11 +129,24 @@ describe("SelfHostedAccountStore", () => {
   it("rejects reset credentials from another browser", () => {
     const accounts = store();
     accounts.register("Froggy", "password-one");
-    const request = accounts.requestPasswordReset("Froggy")!;
+    accounts.register("Alice", "password-two");
+    const request = accounts.requestPasswordReset("Alice");
+    expect(request.outcome).toBe("created");
+    if (request.outcome !== "created") throw new Error("request not created");
 
     expect(
       accounts.passwordResetStatus(request.requestId, "wrong-recovery-token"),
     ).toBeNull();
+  });
+
+  it("requires local owner recovery for administrator accounts", () => {
+    const accounts = store();
+    accounts.register("Froggy", "password-one");
+
+    expect(accounts.requestPasswordReset("Froggy")).toEqual({
+      outcome: "admin_requires_owner",
+    });
+    expect(accounts.adminOverview().resets).toEqual([]);
   });
 
   it("supports a local owner recovery and revokes old sessions", () => {
@@ -139,5 +160,25 @@ describe("SelfHostedAccountStore", () => {
     expect(accounts.login("Froggy", "temporary-password")?.account.role).toBe(
       "admin",
     );
+  });
+
+  it("cancels outstanding reset approval when a password is changed", () => {
+    const accounts = store();
+    accounts.register("Froggy", "password-one");
+    const player = accounts.register("Alice", "password-two");
+    const request = accounts.requestPasswordReset("Alice");
+    if (request.outcome !== "created") throw new Error("request not created");
+
+    expect(
+      accounts.changePassword(
+        player.account.id,
+        "password-two",
+        "password-three",
+      ),
+    ).toBe(true);
+    expect(
+      accounts.passwordResetStatus(request.requestId, request.recoveryToken)
+        ?.status,
+    ).toBe("cancelled");
   });
 });

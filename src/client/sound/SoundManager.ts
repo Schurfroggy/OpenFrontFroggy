@@ -2,55 +2,92 @@ import { Howl } from "howler";
 import { assetUrl } from "../../core/AssetUrls";
 import { EventBus } from "../../core/EventBus";
 import { AudioMixer, PlayableCategory } from "./AudioMixer";
+import { fadeInMusic } from "./MusicFade";
 import {
   AmbienceTrack,
   ambienceUrls,
   PlaySoundEffectEvent,
+  PlayVictoryMusicEvent,
   SetAmbienceEvent,
   SoundEffect,
 } from "./Sounds";
 
 const AMBIENCE_FADE_MS = 500;
+const MUSIC_GAP_MS = 10_000;
+const FIRE_MUSIC_AFTER_SECONDS = 15 * 60;
+const PLAYING_TRACKS = [
+  "Playing1.mp3",
+  "Playing2.mp3",
+  "Playing3.mp3",
+  "Playing4.mp3",
+  "Playing5.mp3",
+].map((name) => assetUrl(`sounds/music/${name}`));
+const FIRE_TRACKS = ["Fire1.mp3", "Fire2.mp3", "Fire3.mp3"].map((name) =>
+  assetUrl(`sounds/music/${name}`),
+);
+const WINNING_TRACK = assetUrl("sounds/music/Winning.mp3");
+
+function shuffleTracks(
+  tracks: readonly string[],
+  avoidFirst?: string,
+): string[] {
+  const shuffled = [...tracks];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  if (
+    avoidFirst !== undefined &&
+    shuffled.length > 1 &&
+    shuffled[0] === avoidFirst
+  ) {
+    [shuffled[0], shuffled[1]] = [shuffled[1], shuffled[0]];
+  }
+  return shuffled;
+}
 
 /**
- * The audio a running game owns: the looping gameplay track and the structure
- * ambience. Cue playback, channel volumes and the concurrency budgets all live
- * in AudioMixer, which outlives any one game.
+ * The audio a running game owns: its phase-aware music playlist and structure
+ * ambience. Cue playback, channel volumes and concurrency budgets all live in
+ * AudioMixer, which outlives any one game.
  */
 export class SoundManager {
   private backgroundMusic: Howl | null = null;
+  private backgroundMusicEndHandler: (() => void) | null = null;
+  private cancelMusicFadeIn: (() => void) | null = null;
+  private musicGapTimer: ReturnType<typeof setTimeout> | null = null;
+  private musicStarted = false;
+  private victoryMusicStarted = false;
+  private musicPhase: "playing" | "fire" = "playing";
+  private musicPlaylist: string[] = [];
+  private musicPlaylistIndex = 0;
+  private lastMusicTrack: string | undefined;
+  private disposed = false;
   private ambienceTracks = new Map<AmbienceTrack, Howl>();
   private currentAmbience: AmbienceTrack | null = null;
   private fadingOut = new Set<Howl>();
   private fadingIn = new Set<Howl>();
   private onPlaySoundEffect: (e: PlaySoundEffectEvent) => void;
+  private onPlayVictoryMusic: (e: PlayVictoryMusicEvent) => void;
   private onSetAmbience: (e: SetAmbienceEvent) => void;
   private stopFollowingVolume: () => void;
 
   constructor(
     private readonly eventBus: EventBus,
     private readonly mixer: AudioMixer,
+    private readonly elapsedGameSeconds: () => number = () => 0,
   ) {
-    this.safely("initialize background music", () => {
-      // One track that keeps looping — including through the victory and
-      // defeat cues — so a game never hard-cuts to silence, per the sound
-      // designer's note. The menu theme (MenuMusic.ts) covers the home page.
-      this.backgroundMusic = new Howl({
-        src: [assetUrl("sounds/music/gameplay.mp3")],
-        loop: true,
-        volume: 0,
-        // Stream it. Howler's default Web Audio path XHRs the whole file and
-        // decodes it to PCM before the first note, and this track is 4.6 MB,
-        // so play() queued behind tens of seconds of silence at game start on
-        // a slow connection. Cues and ambience stay on Web Audio.
-        html5: true,
-      });
-      this.mixer.register(this.backgroundMusic, "music");
-    });
-
-    this.onPlaySoundEffect = (e) => this.mixer.play(e.effect);
+    this.onPlaySoundEffect = (e) => {
+      // Victory replaces the playlist through PlayVictoryMusicEvent. Defeat
+      // is a short cue instead, so explicitly end the Playing/Fire playlist
+      // before the cue starts or both tracks overlap on the result screen.
+      if (e.effect === "defeat") this.stopBackgroundMusic();
+      this.mixer.play(e.effect);
+    };
+    this.onPlayVictoryMusic = () => this.playVictoryMusic();
     this.onSetAmbience = (e) => this.setAmbience(e.track, e.gain);
     eventBus.on(PlaySoundEffectEvent, this.onPlaySoundEffect);
+    eventBus.on(PlayVictoryMusicEvent, this.onPlayVictoryMusic);
     eventBus.on(SetAmbienceEvent, this.onSetAmbience);
 
     // Ambience is crossfaded here rather than registered with the mixer, so
@@ -61,16 +98,13 @@ export class SoundManager {
   }
 
   dispose(): void {
+    this.disposed = true;
     this.eventBus.off(PlaySoundEffectEvent, this.onPlaySoundEffect);
+    this.eventBus.off(PlayVictoryMusicEvent, this.onPlayVictoryMusic);
     this.eventBus.off(SetAmbienceEvent, this.onSetAmbience);
     this.stopFollowingVolume();
-    if (this.backgroundMusic !== null) {
-      const music = this.backgroundMusic;
-      this.mixer.unregister(music);
-      this.safely("stop background music", () => music.stop());
-      this.safely("unload background music", () => music.unload());
-      this.backgroundMusic = null;
-    }
+    this.clearMusicGap();
+    this.releaseBackgroundMusic();
     this.ambienceTracks.forEach((sound) => {
       this.safely("stop ambience track", () => sound.stop());
       this.safely("unload ambience track", () => sound.unload());
@@ -90,15 +124,102 @@ export class SoundManager {
   }
 
   public playBackgroundMusic(): void {
-    this.safely("play background music", () => {
-      if (this.backgroundMusic !== null && !this.backgroundMusic.playing()) {
-        this.backgroundMusic.play();
-      }
-    });
+    if (this.musicStarted || this.disposed) return;
+    this.musicStarted = true;
+    this.victoryMusicStarted = false;
+    this.musicPhase = "playing";
+    this.musicPlaylist = shuffleTracks(PLAYING_TRACKS);
+    this.musicPlaylistIndex = 0;
+    this.playNextBackgroundTrack();
   }
 
   public stopBackgroundMusic(): void {
-    this.safely("stop background music", () => this.backgroundMusic?.stop());
+    this.musicStarted = false;
+    this.clearMusicGap();
+    this.releaseBackgroundMusic();
+  }
+
+  private playNextBackgroundTrack(): void {
+    if (!this.musicStarted || this.victoryMusicStarted || this.disposed) return;
+
+    if (
+      this.musicPhase === "playing" &&
+      this.elapsedGameSeconds() >= FIRE_MUSIC_AFTER_SECONDS
+    ) {
+      this.musicPhase = "fire";
+      this.musicPlaylist = shuffleTracks(FIRE_TRACKS, this.lastMusicTrack);
+      this.musicPlaylistIndex = 0;
+    }
+
+    const sourceTracks =
+      this.musicPhase === "playing" ? PLAYING_TRACKS : FIRE_TRACKS;
+    if (this.musicPlaylistIndex >= this.musicPlaylist.length) {
+      this.musicPlaylist = shuffleTracks(sourceTracks, this.lastMusicTrack);
+      this.musicPlaylistIndex = 0;
+    }
+
+    const track = this.musicPlaylist[this.musicPlaylistIndex++];
+    this.lastMusicTrack = track;
+    this.playMusicTrack(track, () => this.scheduleNextBackgroundTrack());
+  }
+
+  private scheduleNextBackgroundTrack(): void {
+    if (!this.musicStarted || this.victoryMusicStarted || this.disposed) return;
+    this.clearMusicGap();
+    this.musicGapTimer = setTimeout(() => {
+      this.musicGapTimer = null;
+      this.playNextBackgroundTrack();
+    }, MUSIC_GAP_MS);
+  }
+
+  private playVictoryMusic(): void {
+    if (this.victoryMusicStarted || this.disposed) return;
+    this.victoryMusicStarted = true;
+    this.clearMusicGap();
+    this.playMusicTrack(WINNING_TRACK);
+  }
+
+  private playMusicTrack(track: string, onEnd?: () => void): void {
+    this.releaseBackgroundMusic();
+    this.safely("play background music", () => {
+      const music = new Howl({
+        src: [track],
+        loop: false,
+        volume: 0,
+        html5: true,
+      });
+      const handleEnd = () => {
+        if (this.backgroundMusic !== music) return;
+        this.releaseBackgroundMusic();
+        onEnd?.();
+      };
+      this.backgroundMusic = music;
+      this.backgroundMusicEndHandler = handleEnd;
+      this.cancelMusicFadeIn = fadeInMusic(music, this.mixer);
+      music.once("end", handleEnd);
+      music.play();
+    });
+  }
+
+  private clearMusicGap(): void {
+    if (this.musicGapTimer === null) return;
+    clearTimeout(this.musicGapTimer);
+    this.musicGapTimer = null;
+  }
+
+  private releaseBackgroundMusic(): void {
+    const music = this.backgroundMusic;
+    if (music === null) return;
+    if (this.backgroundMusicEndHandler !== null) {
+      music.off("end", this.backgroundMusicEndHandler);
+    }
+    this.backgroundMusicEndHandler = null;
+    this.cancelMusicFadeIn?.();
+    this.cancelMusicFadeIn = null;
+    this.mixer.unregister(music);
+    this.safely("stop background music", () => music.stop());
+    this.safely("unload background music", () => music.unload());
+    this.backgroundMusic = null;
   }
 
   /** Kept for callers that still reach for it; the mixer owns cue playback. */

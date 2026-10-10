@@ -315,7 +315,36 @@ export async function copyToClipboard(
   timeout = 2000,
 ): Promise<void> {
   try {
-    await navigator.clipboard.writeText(text);
+    let copied = false;
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        copied = true;
+      } catch {
+        // Some browsers expose Clipboard on HTTP but reject writeText. Fall
+        // through to the user-gesture-compatible legacy path below.
+      }
+    }
+    if (!copied) {
+      // The async Clipboard API is unavailable on non-secure HTTP origins
+      // (for example a friend-hosted server opened by its IP address). Keep a
+      // user-gesture-compatible fallback so lobby links and crash reports can
+      // still be copied until the server is moved behind HTTPS.
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      textarea.style.pointerEvents = "none";
+      document.body.appendChild(textarea);
+      try {
+        textarea.select();
+        copied = document.execCommand("copy");
+      } finally {
+        textarea.remove();
+      }
+      if (!copied) throw new Error("Clipboard copy command was rejected");
+    }
     if (onSuccess) onSuccess();
     if (onReset) {
       setTimeout(() => {

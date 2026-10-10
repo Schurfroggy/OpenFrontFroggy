@@ -55,6 +55,7 @@ import {
 import { SoundManager } from "../../../src/client/sound/SoundManager";
 import {
   PlaySoundEffectEvent,
+  PlayVictoryMusicEvent,
   SetAmbienceEvent,
 } from "../../../src/client/sound/Sounds";
 import { EventBus } from "../../../src/core/EventBus";
@@ -77,6 +78,7 @@ let eventBus: EventBus;
 let settings: UserSettings;
 let mixer: AudioMixer;
 let soundManager: SoundManager;
+let elapsedGameSeconds = 0;
 
 function build({ ambience = 1, music = 1 } = {}) {
   settings = new UserSettings();
@@ -85,12 +87,13 @@ function build({ ambience = 1, music = 1 } = {}) {
   settings.setAudioVolume("effects", 1);
   mixer = new AudioMixer(settings);
   eventBus = new EventBus();
-  soundManager = new SoundManager(eventBus, mixer);
+  soundManager = new SoundManager(eventBus, mixer, () => elapsedGameSeconds);
 }
 
 beforeEach(() => {
   howlInstances.length = 0;
   nextPlayId = 1;
+  elapsedGameSeconds = 0;
   howlerVolume.mockClear();
   resetSettings();
   vi.spyOn(document, "hasFocus").mockReturnValue(true);
@@ -101,41 +104,125 @@ afterEach(() => {
   soundManager?.dispose();
   mixer?.dispose();
   resetAudioMixerForTest();
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
 describe("background music", () => {
-  it("is a single looping track, not a playlist", () => {
-    const music = find("gameplay.mp3");
+  it("starts with one non-looping track from the Playing playlist", () => {
+    soundManager.playBackgroundMusic();
+    const music = howlInstances.find((h) => h.src.includes("/Playing"));
     expect(music).toBeDefined();
-    expect(music.loop).toBe(true);
+    expect(music.loop).toBe(false);
     expect(howlInstances.filter((h) => h.src.includes("music/")).length).toBe(
       1,
     );
   });
 
   it("streams instead of waiting for the whole file to decode", () => {
-    // Howler's default Web Audio path downloads and decodes the entire track
-    // before the first note. gameplay.mp3 is 4.6 MB, which was tens of seconds
-    // of silence at game start. Ambience and cues stay on Web Audio, so this
-    // has to stay specific to the music track.
-    expect(find("gameplay.mp3").html5).toBe(true);
+    soundManager.playBackgroundMusic();
+    const music = howlInstances.find((h) => h.src.includes("/Playing"));
+    expect(music.html5).toBe(true);
   });
 
   it("follows the music slider through the mixer", () => {
+    vi.useFakeTimers();
+    soundManager.playBackgroundMusic();
+    const music = howlInstances.find((h) => h.src.includes("/Playing"));
+    music._fire("play", -1);
+    vi.advanceTimersByTime(2100);
     settings.setAudioVolume("music", 0.5);
     // 0.5 squared for the audio taper, then the -1 dB music trim.
-    expect(
-      find("gameplay.mp3").volumes[find("gameplay.mp3").volumes.length - 1],
-    ).toBeCloseTo(0.25 * 0.89);
+    expect(music.volumes[music.volumes.length - 1]).toBeCloseTo(0.25 * 0.89);
   });
 
   it("only starts once", () => {
     soundManager.playBackgroundMusic();
-    const music = find("gameplay.mp3");
-    music.playing.mockReturnValue(true);
+    const music = howlInstances.find((h) => h.src.includes("/Playing"));
     soundManager.playBackgroundMusic();
     expect(music.play).toHaveBeenCalledTimes(1);
+    expect(howlInstances.filter((h) => h.src.includes("music/")).length).toBe(
+      1,
+    );
+  });
+
+  it("waits ten seconds between gameplay tracks", () => {
+    vi.useFakeTimers();
+    soundManager.playBackgroundMusic();
+    const first = howlInstances.find((h) => h.src.includes("/Playing"));
+
+    first._fire("end", -1);
+    vi.advanceTimersByTime(9999);
+    expect(howlInstances.filter((h) => h.src.includes("music/")).length).toBe(
+      1,
+    );
+
+    vi.advanceTimersByTime(1);
+    expect(howlInstances.filter((h) => h.src.includes("music/")).length).toBe(
+      2,
+    );
+  });
+
+  it("plays every Playing track once before reshuffling", () => {
+    vi.useFakeTimers();
+    soundManager.playBackgroundMusic();
+
+    for (let i = 0; i < 4; i++) {
+      const current = howlInstances[howlInstances.length - 1];
+      current._fire("end", -1);
+      vi.advanceTimersByTime(10_000);
+    }
+
+    const firstCycle = howlInstances.map((h) => h.src.match(/Playing\d/)?.[0]);
+    expect(new Set(firstCycle)).toEqual(
+      new Set(["Playing1", "Playing2", "Playing3", "Playing4", "Playing5"]),
+    );
+  });
+
+  it("switches to the Fire playlist when the next track starts after 15 minutes", () => {
+    vi.useFakeTimers();
+    soundManager.playBackgroundMusic();
+    const first = howlInstances.find((h) => h.src.includes("/Playing"));
+
+    first._fire("end", -1);
+    elapsedGameSeconds = 15 * 60;
+    vi.advanceTimersByTime(10_000);
+
+    expect(howlInstances[howlInstances.length - 1].src).toContain("/Fire");
+  });
+
+  it("interrupts the playlist and plays Winning for the local winner", () => {
+    vi.useFakeTimers();
+    soundManager.playBackgroundMusic();
+    const playing = howlInstances.find((h) => h.src.includes("/Playing"));
+
+    eventBus.emit(new PlayVictoryMusicEvent());
+
+    expect(playing.stop).toHaveBeenCalled();
+    expect(howlInstances[howlInstances.length - 1].src).toContain(
+      "/Winning.mp3",
+    );
+    howlInstances[howlInstances.length - 1]._fire("end", -1);
+    vi.advanceTimersByTime(20_000);
+    expect(howlInstances.filter((h) => h.src.includes("music/")).length).toBe(
+      2,
+    );
+  });
+
+  it("stops the gameplay playlist when the defeat cue plays", () => {
+    vi.useFakeTimers();
+    const playCue = vi.spyOn(mixer, "play");
+    soundManager.playBackgroundMusic();
+    const playing = howlInstances.find((h) => h.src.includes("/Playing"));
+
+    eventBus.emit(new PlaySoundEffectEvent("defeat"));
+
+    expect(playing.stop).toHaveBeenCalled();
+    expect(playCue).toHaveBeenCalledWith("defeat");
+    vi.advanceTimersByTime(20_000);
+    expect(howlInstances.filter((h) => h.src.includes("music/")).length).toBe(
+      1,
+    );
   });
 });
 
@@ -309,8 +396,9 @@ describe("ambience", () => {
 
 describe("teardown", () => {
   it("stops and unloads everything it owns", () => {
+    soundManager.playBackgroundMusic();
     eventBus.emit(new SetAmbienceEvent("city", 0.1));
-    const music = find("gameplay.mp3");
+    const music = howlInstances.find((h) => h.src.includes("/Playing"));
     const city = find("city.mp3");
 
     soundManager.dispose();

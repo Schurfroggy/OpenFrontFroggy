@@ -44,6 +44,9 @@ const BORDER_TINT_RATIO = 0.35;
 export class PlayerView {
   public anonymousName: string | null = null;
   private decoder?: PatternDecoder;
+  private _killedByName: string | null;
+  private _killedByTeam: Team | null;
+  private _killedByType: PlayerType | null;
 
   /** Long-lived renderer state — mutated in place by applyUpdate(). */
   public state: PlayerState;
@@ -76,6 +79,9 @@ export class PlayerView {
     public readonly equippedCosmetics: PlayerCosmetics,
   ) {
     this.state = playerStateFromUpdate(data);
+    this._killedByName = data.killedByName ?? null;
+    this._killedByTeam = data.killedByTeam ?? null;
+    this._killedByType = data.killedByType ?? null;
     // Respect the client-side "Disable emojis" setting: when off, never surface
     // emoji data to any renderer/overlay that reads this shared state (#4430).
     if (!userSettings.emojis()) {
@@ -213,6 +219,9 @@ export class PlayerView {
    */
   applyUpdate(pu: PlayerUpdate): void {
     applyStateUpdate(this.state, pu);
+    if (pu.killedByName !== undefined) this._killedByName = pu.killedByName;
+    if (pu.killedByTeam !== undefined) this._killedByTeam = pu.killedByTeam;
+    if (pu.killedByType !== undefined) this._killedByType = pu.killedByType;
     // applyStateUpdate refreshes outgoingEmojis every tick; re-apply the
     // "Disable emojis" setting so live emojis stay hidden when it's off (#4430).
     if (!userSettings.emojis()) {
@@ -426,6 +435,15 @@ export class PlayerView {
   }
   killedBy(): string | null {
     return this.state.killedBy;
+  }
+  killedByName(): string | null {
+    return this._killedByName;
+  }
+  killedByTeam(): Team | null {
+    return this._killedByTeam;
+  }
+  killedByType(): PlayerType | null {
+    return this._killedByType;
   }
   deathPosition(): number | null {
     return this.state.deathPosition;

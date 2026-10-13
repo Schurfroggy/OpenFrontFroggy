@@ -2497,6 +2497,12 @@
   "map_layers": {
     "label": "标签"
   },
+  "map_view": {
+    "default": "常规视图",
+    "sam": "防空视图",
+    "title": "地图视图",
+    "war": "战争视图"
+  },
   "marketing_consent": {
     "body": "通过邮箱向您分享游戏最新进展。随时都可以在您的账号中更改。",
     "dismiss": "忽略",

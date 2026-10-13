@@ -5,11 +5,17 @@
  *   affiliation recolor + grid overlay + hides names.
  * - ToggleCoordinateGridEvent: persistent coordinate-grid toggle (M keybind);
  *   grid shows but names stay visible.
+ * - MapViewModeEvent: persistent overlay mode from the left-side view
+ *   selector rail (default / SAM coverage).
  */
 
 import { EventBus } from "../../core/EventBus";
 import { Controller } from "../Controller";
-import { AlternateViewEvent, ToggleCoordinateGridEvent } from "../InputHandler";
+import {
+  AlternateViewEvent,
+  MapViewModeEvent,
+  ToggleCoordinateGridEvent,
+} from "../InputHandler";
 import { MapRenderer } from "../render/gl";
 
 export class ViewModeController implements Controller {
@@ -25,5 +31,9 @@ export class ViewModeController implements Controller {
     this.eventBus.on(ToggleCoordinateGridEvent, (e) =>
       this.view.setGridView(e.enabled),
     );
+    this.eventBus.on(MapViewModeEvent, (e) => {
+      this.view.setSamView(e.mode === "sam");
+      this.view.setWarView(e.mode === "war");
+    });
   }
 }

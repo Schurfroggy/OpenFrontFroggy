@@ -56,6 +56,7 @@ import { SoundManager } from "../../../src/client/sound/SoundManager";
 import {
   PlaySoundEffectEvent,
   PlayVictoryMusicEvent,
+  ResumeGameMusicEvent,
   SetAmbienceEvent,
 } from "../../../src/client/sound/Sounds";
 import { EventBus } from "../../../src/core/EventBus";
@@ -207,6 +208,22 @@ describe("background music", () => {
     expect(howlInstances.filter((h) => h.src.includes("music/")).length).toBe(
       2,
     );
+  });
+
+  it("stops the victory fanfare and resumes the gameplay playlist", () => {
+    vi.useFakeTimers();
+    soundManager.playBackgroundMusic();
+    const playing = howlInstances.find((h) => h.src.includes("/Playing"));
+
+    eventBus.emit(new PlayVictoryMusicEvent());
+    const winning = howlInstances.find((h) => h.src.includes("/Winning.mp3"));
+    expect(playing.stop).toHaveBeenCalled();
+    expect(winning).toBeDefined();
+
+    eventBus.emit(new ResumeGameMusicEvent());
+
+    expect(winning.stop).toHaveBeenCalled();
+    expect(howlInstances[howlInstances.length - 1].src).toContain("/Playing");
   });
 
   it("stops the gameplay playlist when the defeat cue plays", () => {

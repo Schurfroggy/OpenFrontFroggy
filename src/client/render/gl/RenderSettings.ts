@@ -377,6 +377,15 @@ export interface RenderSettings {
     outlineWidth: number; // outline border width in world units
     outlineSoftness: number; // smoothstep range (0 = hard, higher = softer)
   };
+  warArrows: {
+    widthStartTiles: number; // ribbon half-width at the tail, world tiles
+    widthTipTiles: number; // ribbon half-width at the tip, world tiles
+    outlineTiles: number; // white outline half-width, world tiles
+    headWidthTiles: number; // arrowhead half-width at its base, world tiles
+    headLenTiles: number; // arrowhead length, world tiles
+    alpha: number; // base opacity (0–1)
+    blinkPeriodMs: number; // ms — retreat blink period
+  };
   bonusPopup: {
     scale: number;
     lifetimeMs: number;

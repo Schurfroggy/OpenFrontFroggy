@@ -1536,6 +1536,12 @@
   "map_layers": {
     "label": "label"
   },
+  "map_view": {
+    "default": "Default view",
+    "sam": "Air defense view",
+    "title": "Map view",
+    "war": "War view"
+  },
   "marketing_consent": {
     "body": "News and updates by email. Change it anytime in your account.",
     "dismiss": "Dismiss",

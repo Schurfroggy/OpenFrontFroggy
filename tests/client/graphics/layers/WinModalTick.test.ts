@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "../../../../src/client/hud/layers/WinModal";
 import type { WinModal } from "../../../../src/client/hud/layers/WinModal";
-import { SendWinnerEvent } from "../../../../src/client/Transport";
+import { PauseGameIntentEvent, SendWinnerEvent } from "../../../../src/client/Transport";
+import { ResumeGameMusicEvent } from "../../../../src/client/sound/Sounds";
 import type { GameView } from "../../../../src/client/view";
 import { EventBus } from "../../../../src/core/EventBus";
 import {
@@ -53,6 +54,7 @@ function makeGame(opts: {
   };
   gameType?: GameType;
   achievementEligible?: boolean;
+  isReplay?: boolean;
 }): GameView {
   const winUpdate = { winner: opts.winner, allPlayersStats: {} };
   return {
@@ -72,6 +74,7 @@ function makeGame(opts: {
     updatesSinceLastTick: () => ({ [GameUpdateType.Win]: [winUpdate] }),
     playerByClientID: () => opts.winnerPlayer,
     config: () => ({
+      isReplay: () => opts.isReplay ?? false,
       gameConfig: () => ({
         rankedType: undefined,
         gameType: opts.gameType,
@@ -95,6 +98,28 @@ describe("WinModal tick win handling", () => {
     modal.game = game;
     modal.eventBus = eventBus;
     return winnerEvents;
+  }
+
+  function setupPauseTracking(game: GameView) {
+    const eventBus = new EventBus();
+    const pauseEvents: PauseGameIntentEvent[] = [];
+    eventBus.on(PauseGameIntentEvent, (e) => pauseEvents.push(e));
+    modal = document.createElement("win-modal") as WinModal;
+    modal.game = game;
+    modal.eventBus = eventBus;
+    return pauseEvents;
+  }
+
+  function setupResumeTracking(game: GameView) {
+    const eventBus = new EventBus();
+    const pauseEvents: PauseGameIntentEvent[] = [];
+    const musicEvents: ResumeGameMusicEvent[] = [];
+    eventBus.on(PauseGameIntentEvent, (e) => pauseEvents.push(e));
+    eventBus.on(ResumeGameMusicEvent, (e) => musicEvents.push(e));
+    modal = document.createElement("win-modal") as WinModal;
+    modal.game = game;
+    modal.eventBus = eventBus;
+    return { pauseEvents, musicEvents };
   }
 
   afterEach(() => {
@@ -234,6 +259,61 @@ describe("WinModal tick win handling", () => {
     modal!.tick();
 
     expect(events).toHaveLength(0);
+    expect(modal!.isVisible).toBe(false);
+  });
+
+  it("pauses the game once it is over", () => {
+    const pauseEvents = setupPauseTracking(
+      makeGame({ winner: ["team", "Blue"], myTeam: "Blue" }),
+    );
+    modal!.tick();
+
+    expect(pauseEvents).toHaveLength(1);
+    expect(pauseEvents[0].paused).toBe(true);
+  });
+
+  it("does not pause during a replay", () => {
+    const pauseEvents = setupPauseTracking(
+      makeGame({
+        winner: ["team", "Blue"],
+        myTeam: "Blue",
+        isReplay: true,
+      }),
+    );
+    modal!.tick();
+
+    expect(pauseEvents).toHaveLength(0);
+  });
+
+  it("pauses only once across repeated ticks", () => {
+    const pauseEvents = setupPauseTracking(
+      makeGame({ winner: ["team", "Blue"], myTeam: "Blue" }),
+    );
+    modal!.tick();
+    modal!.tick();
+
+    expect(pauseEvents).toHaveLength(1);
+  });
+
+  it("resumes the game and music when keep playing is clicked", async () => {
+    const { pauseEvents, musicEvents } = setupResumeTracking(
+      makeGame({ winner: ["team", "Blue"], myTeam: "Blue" }),
+    );
+    document.body.appendChild(modal!);
+    modal!.show();
+    await modal!.updateComplete;
+
+    const keepButton = Array.from(
+      modal!.querySelectorAll("o-button"),
+    ).find(
+      (b) => (b as unknown as { title: string }).title === "win_modal.keep",
+    );
+    expect(keepButton).toBeDefined();
+    keepButton!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    expect(pauseEvents).toHaveLength(1);
+    expect(pauseEvents[0].paused).toBe(false);
+    expect(musicEvents).toHaveLength(1);
     expect(modal!.isVisible).toBe(false);
   });
 });

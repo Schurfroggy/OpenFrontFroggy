@@ -88,6 +88,12 @@ export class PlaySoundEffectEvent implements GameEvent {
 export class PlayVictoryMusicEvent implements GameEvent {}
 
 /**
+ * Stops the victory fanfare and resumes the gameplay playlist that victory
+ * interrupted (fired when the player dismisses the settlement to keep playing).
+ */
+export class ResumeGameMusicEvent implements GameEvent {}
+
+/**
  * Mixer channel a cue plays on. "master" is the global trim and "music" is
  * owned by the two looping tracks, so neither is ever a cue's channel.
  */

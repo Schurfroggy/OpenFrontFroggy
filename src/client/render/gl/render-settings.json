@@ -312,6 +312,15 @@
     "outlineWidth": 0.4,
     "outlineSoftness": 0.15
   },
+  "warArrows": {
+    "widthStartTiles": 2.2,
+    "widthTipTiles": 1.4,
+    "outlineTiles": 0.55,
+    "headWidthTiles": 5.5,
+    "headLenTiles": 7.0,
+    "alpha": 1.0,
+    "blinkPeriodMs": 900
+  },
   "bonusPopup": {
     "scale": 6,
     "lifetimeMs": 1500,

@@ -43,6 +43,8 @@ import { FxPass } from "./passes/fx-pass";
 import { LightmapPass } from "./passes/LightmapPass";
 import { MapLayerPass } from "./passes/MapLayerPass";
 import { MoveIndicatorPass } from "./passes/MoveIndicatorPass";
+import { WarArrowPass } from "./passes/WarArrowPass";
+import type { WarArrow } from "./passes/WarArrowPass";
 import { NamePass } from "./passes/name-pass";
 import { NightCompositePass } from "./passes/NightCompositePass";
 import { NukeTelegraphPass } from "./passes/NukeTelegraphPass";
@@ -136,6 +138,7 @@ export class GPURenderer {
   private fxPass: FxPass;
   private rangeCirclePass: RangeCirclePass;
   private samRadiusPass: SAMRadiusPass;
+  private warArrowPass: WarArrowPass;
   private crosshairPass: CrosshairPass;
   private railroadPass: RailroadPass;
   private barPass: BarPass;
@@ -201,9 +204,12 @@ export class GPURenderer {
   // Grid-view: coordinate grid overlay (M toggle)
   private gridView = false;
 
-  // SAM radius visibility tracking (show if either source is true)
+  // SAM radius visibility tracking (show if any source is true)
   private samGhostVisible = false;
   private samHighlightVisible = false;
+  // Persistent "SAM view" map mode — keeps every SAM range ring on screen
+  // regardless of build previews or structure-button hovers.
+  private samViewActive = false;
 
   // Warship selection — supports any number of selections.
   private selectedUnitIds: number[] = [];
@@ -558,6 +564,9 @@ export class GPURenderer {
     // --- SAM radius overlay (dashed green circles during build mode) ---
     this.samRadiusPass = new SAMRadiusPass(gl, mapW, this.settings);
     this.samRadiusPass.setPaletteData(paletteData);
+
+    // --- War view arrows (attack fronts, attacker-colored) ---
+    this.warArrowPass = new WarArrowPass(gl, this.settings);
 
     // --- Crosshair (warship placement) ---
     this.crosshairPass = new CrosshairPass(gl);
@@ -1089,7 +1098,7 @@ export class GPURenderer {
     this.samGhostVisible =
       data !== null && SAM_RADIUS_GHOST_TYPES.has(data.ghostType);
     this.samRadiusPass.setVisible(
-      this.samGhostVisible || this.samHighlightVisible,
+      this.samGhostVisible || this.samHighlightVisible || this.samViewActive,
     );
   }
 
@@ -1131,7 +1140,7 @@ export class GPURenderer {
       unitTypes !== null &&
       unitTypes.some((t) => SAM_RADIUS_HIGHLIGHT_TYPES.has(t));
     this.samRadiusPass.setVisible(
-      this.samGhostVisible || this.samHighlightVisible,
+      this.samGhostVisible || this.samHighlightVisible || this.samViewActive,
     );
   }
 
@@ -1169,6 +1178,30 @@ export class GPURenderer {
     } catch {
       // Ignore if we are unable to use localstorage.
     }
+  }
+
+  /**
+   * Persistent SAM overlay from the view selector: force-shows every SAM
+   * range ring. Independent of (and OR-ed with) the transient ghost-preview
+   * and structure-hover channels.
+   */
+  setSamView(active: boolean): void {
+    if (this.samViewActive === active) return;
+    this.samViewActive = active;
+    this.samRadiusPass.setVisible(
+      this.samGhostVisible || this.samHighlightVisible || this.samViewActive,
+    );
+  }
+
+  /** War view: which attack-front arrows to draw (pushed per tick). */
+  updateWarArrows(arrows: WarArrow[]): void {
+    this.warArrowPass.updateArrows(arrows);
+  }
+
+  /** War view on/off (view selector). */
+  setWarView(active: boolean): void {
+    this.warArrowPass.setVisible(active);
+    if (!active) this.warArrowPass.updateArrows([]);
   }
 
   getSettings(): RenderSettings {
@@ -1366,6 +1399,7 @@ export class GPURenderer {
     if (pe.unit) this.unitPass.drawGround(cam);
     if (pe.falloutBloom) this.bloomPass.draw(cam, this.frameTick);
     this.samRadiusPass.draw(cam);
+    this.warArrowPass.draw(cam, zoom);
     this.rangeCirclePass.draw(cam);
     this.nukeTrajectoryPass.draw(cam);
     this.crosshairPass.draw(cam);

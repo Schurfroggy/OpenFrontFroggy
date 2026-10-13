@@ -32,6 +32,7 @@ import type {
 } from "../types";
 import type { SpawnCenter } from "./passes/SpawnOverlayPass";
 import type { AttackTroopLabel } from "./passes/WorldTextPass";
+import type { WarArrow } from "./passes/WarArrowPass";
 import { GPURenderer } from "./Renderer";
 import type { RenderSettings } from "./RenderSettings";
 
@@ -375,6 +376,18 @@ export class MapRenderer {
   }
   setGridView(active: boolean): void {
     this.renderer?.setGridView(active);
+  }
+  /** Persistent SAM-overlay map mode from the view selector. */
+  setSamView(active: boolean): void {
+    this.renderer?.setSamView(active);
+  }
+  /** War view on/off from the view selector. */
+  setWarView(active: boolean): void {
+    this.renderer?.setWarView(active);
+  }
+  /** War view arrows (pushed per tick by WarFrontsController). */
+  updateWarArrows(arrows: WarArrow[]): void {
+    this.renderer?.updateWarArrows(arrows);
   }
   setHighlightOwner(ownerID: number): void {
     this.renderer?.setHighlightOwner(ownerID);

@@ -36,8 +36,9 @@ import { recordSelfHostedAchievement } from "../../SelfHostedAchievements";
 import {
   PlaySoundEffectEvent,
   PlayVictoryMusicEvent,
+  ResumeGameMusicEvent,
 } from "../../sound/Sounds";
-import { SendWinnerEvent } from "../../Transport";
+import { PauseGameIntentEvent, SendWinnerEvent } from "../../Transport";
 import { GameView } from "../../view";
 
 const ICONS = {
@@ -80,6 +81,7 @@ export class WinModal extends LitElement implements Controller {
 
   private hasShownDeathModal = false;
   private achievementRecorded = false;
+  private pausedForGameOver = false;
 
   @state()
   isVisible = false;
@@ -148,7 +150,7 @@ export class WinModal extends LitElement implements Controller {
             .title=${this.game?.myPlayer()?.isAlive()
               ? translateText("win_modal.keep")
               : translateText("win_modal.spectate")}
-            @click=${this.hide}
+            @click=${this._handleKeepPlaying}
           ></o-button>
         </div>
       </div>
@@ -509,6 +511,15 @@ export class WinModal extends LitElement implements Controller {
     window.location.href = homeHref();
   }
 
+  // "Keep playing" / "Spectate": resume the game that was paused on game over
+  // and restore the gameplay music (stopping the victory fanfare), then dismiss
+  // the settlement panel so the map runs again behind it.
+  private _handleKeepPlaying() {
+    this.eventBus.emit(new PauseGameIntentEvent(false));
+    this.eventBus.emit(new ResumeGameMusicEvent());
+    this.hide();
+  }
+
   private _handleRequeue() {
     this.hide();
     // Requeue for the same mode; Main owns the mechanism (currently a
@@ -551,6 +562,9 @@ export class WinModal extends LitElement implements Controller {
     }
     const updates = this.game.updatesSinceLastTick();
     const winUpdates = updates?.[GameUpdateType.Win] ?? [];
+    if (winUpdates.length > 0) {
+      this.pauseForGameOver();
+    }
     winUpdates.forEach((wu) => {
       this.allResultStats = wu.allPlayersStats;
       if (!this.hasShownDeathModal) {
@@ -641,6 +655,18 @@ export class WinModal extends LitElement implements Controller {
         this.show();
       }
     });
+  }
+
+  // When the game is over (a winner is decided, or the match is cancelled),
+  // reuse the same pause path as the in-game pause button so the map behind the
+  // settlement modal stops moving. Skipped in replays (the replay player owns
+  // pause there) and never fired for a personal death, which only shows the
+  // death modal while the game continues.
+  private pauseForGameOver(): void {
+    if (this.pausedForGameOver) return;
+    this.pausedForGameOver = true;
+    if (this.game.config().isReplay()) return;
+    this.eventBus.emit(new PauseGameIntentEvent(true));
   }
 
   private recordAchievement(): void {

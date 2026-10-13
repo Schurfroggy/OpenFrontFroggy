@@ -87,6 +87,13 @@ export class AlternateViewEvent implements GameEvent {
   constructor(public readonly alternateView: boolean) {}
 }
 
+/** Persistent map view modes cycled by the left-side view selector. */
+export type MapViewMode = "default" | "sam" | "war";
+
+export class MapViewModeEvent implements GameEvent {
+  constructor(public readonly mode: MapViewMode) {}
+}
+
 export class CloseViewEvent implements GameEvent {}
 
 export class RefreshGraphicsEvent implements GameEvent {}

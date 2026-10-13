@@ -10,6 +10,7 @@ import { MapLayerController } from "../controllers/MapLayerController";
 import { SoundEffectController } from "../controllers/SoundEffectController";
 import { StructureHighlightController } from "../controllers/StructureHighlightController";
 import { ViewModeController } from "../controllers/ViewModeController";
+import { WarFrontsController } from "../controllers/WarFrontsController";
 import { WarshipSelectionController } from "../controllers/WarshipSelectionController";
 import { GameStartingModal } from "../GameStartingModal";
 import { migrateLegacyGraphicsSettings } from "../GraphicsPresets";
@@ -30,6 +31,7 @@ import { EmojiTable } from "./layers/EmojiTable";
 import { EventsDisplay } from "./layers/EventsDisplay";
 import { GameLeftSidebar } from "./layers/GameLeftSidebar";
 import { GameRightSidebar } from "./layers/GameRightSidebar";
+import { MapViewSelector } from "./layers/MapViewSelector";
 import { HeadsUpMessage } from "./layers/HeadsUpMessage";
 import { ImmunityTimer } from "./layers/ImmunityTimer";
 import { InGamePromo } from "./layers/InGamePromo";
@@ -97,6 +99,15 @@ export function createRenderer(
   }
   gameLeftSidebar.game = game;
   gameLeftSidebar.eventBus = eventBus;
+
+  const mapViewSelector = document.querySelector(
+    "map-view-selector",
+  ) as MapViewSelector | null;
+  if (mapViewSelector && mapViewSelector instanceof MapViewSelector) {
+    mapViewSelector.eventBus = eventBus;
+  } else {
+    console.error("MapViewSelector element not found in the DOM");
+  }
 
   const controlPanel = document.querySelector("control-panel") as ControlPanel;
   if (!(controlPanel instanceof ControlPanel)) {
@@ -331,6 +342,7 @@ export function createRenderer(
     new LiveStatsController(game, eventBus),
     new StructureHighlightController(eventBus, view),
     new ViewModeController(eventBus, view),
+    new WarFrontsController(game, eventBus, view),
     new AttackingTroopsController(game, eventBus, userSettings, view),
     new SoundEffectController(game, eventBus),
     new AmbienceController(game, eventBus, transformHandler),
@@ -352,6 +364,7 @@ export function createRenderer(
     spawnTimer,
     immunityTimer,
     gameLeftSidebar,
+    ...(mapViewSelector ? [mapViewSelector] : []),
     unitDisplay,
     gameRightSidebar,
     controlPanel,

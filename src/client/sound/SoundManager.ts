@@ -8,6 +8,7 @@ import {
   ambienceUrls,
   PlaySoundEffectEvent,
   PlayVictoryMusicEvent,
+  ResumeGameMusicEvent,
   SetAmbienceEvent,
   SoundEffect,
 } from "./Sounds";
@@ -69,6 +70,7 @@ export class SoundManager {
   private fadingIn = new Set<Howl>();
   private onPlaySoundEffect: (e: PlaySoundEffectEvent) => void;
   private onPlayVictoryMusic: (e: PlayVictoryMusicEvent) => void;
+  private onResumeGameMusic: (e: ResumeGameMusicEvent) => void;
   private onSetAmbience: (e: SetAmbienceEvent) => void;
   private stopFollowingVolume: () => void;
 
@@ -85,9 +87,11 @@ export class SoundManager {
       this.mixer.play(e.effect);
     };
     this.onPlayVictoryMusic = () => this.playVictoryMusic();
+    this.onResumeGameMusic = () => this.resumeGameMusic();
     this.onSetAmbience = (e) => this.setAmbience(e.track, e.gain);
     eventBus.on(PlaySoundEffectEvent, this.onPlaySoundEffect);
     eventBus.on(PlayVictoryMusicEvent, this.onPlayVictoryMusic);
+    eventBus.on(ResumeGameMusicEvent, this.onResumeGameMusic);
     eventBus.on(SetAmbienceEvent, this.onSetAmbience);
 
     // Ambience is crossfaded here rather than registered with the mixer, so
@@ -101,6 +105,7 @@ export class SoundManager {
     this.disposed = true;
     this.eventBus.off(PlaySoundEffectEvent, this.onPlaySoundEffect);
     this.eventBus.off(PlayVictoryMusicEvent, this.onPlayVictoryMusic);
+    this.eventBus.off(ResumeGameMusicEvent, this.onResumeGameMusic);
     this.eventBus.off(SetAmbienceEvent, this.onSetAmbience);
     this.stopFollowingVolume();
     this.clearMusicGap();
@@ -177,6 +182,19 @@ export class SoundManager {
     this.victoryMusicStarted = true;
     this.clearMusicGap();
     this.playMusicTrack(WINNING_TRACK);
+  }
+
+  /**
+   * Stops the victory fanfare and resumes the gameplay playlist it interrupted.
+   * The Playing/Fire phase, shuffled playlist and index all survive victory, so
+   * the game music picks up where it left off. No-op if the game music was
+   * never running (e.g. a defeat already stopped it).
+   */
+  public resumeGameMusic(): void {
+    if (this.disposed) return;
+    this.victoryMusicStarted = false;
+    this.clearMusicGap();
+    this.playNextBackgroundTrack();
   }
 
   private playMusicTrack(track: string, onEnd?: () => void): void {

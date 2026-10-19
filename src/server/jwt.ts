@@ -9,7 +9,10 @@ import {
 import { CloseCode, CloseReason } from "../core/CloseCodes";
 import { GameEnv } from "../core/configuration/Config";
 import { PersistentIdSchema } from "../core/Schemas";
-import { SelfHostedAccountStore } from "./SelfHostedAccountStore";
+import {
+  SelfHostedAccount,
+  SelfHostedAccountStore,
+} from "./SelfHostedAccountStore";
 import { ServerEnv } from "./ServerEnv";
 
 type TokenVerificationResult =
@@ -95,9 +98,53 @@ export async function verifyClientToken(
 // status is the API's HTTP status; unset for network and parse failures.
 export type UserMeError = { type: "error"; status?: number; message: string };
 
+// The account profile a self-hosted server can actually answer for. There is
+// no API behind it: everything the cloud API would decide (subscriptions,
+// flares, friends, trust) either doesn't exist here or is granted to every
+// registered account, so the values are fixed rather than fetched.
+export function selfHostedUserMe(account: SelfHostedAccount): UserMeResponse {
+  return {
+    user: {},
+    ban: null,
+    player: {
+      publicId: account.id,
+      adfree: true,
+      unlimitedRanked: true,
+      canCreatePublicLobbies: true,
+      // Accounts are the trust boundary on a self-hosted server: there is no
+      // newer/linked-account signal to weigh, and guests stay untrusted.
+      trustTier: "trusted",
+      username: account.username,
+      usernameBase: account.username,
+      usernameStatus: "claimed",
+      flares: [],
+      achievements: { singleplayerMap: [], player: [] },
+      friends: [],
+      subscription: null,
+    },
+  };
+}
+
 export async function getUserMe(
   token: string,
 ): Promise<{ type: "success"; response: UserMeResponse } | UserMeError> {
+  // Self-hosted servers have no account API to ask: the play token IS the
+  // account id (see /api/self-hosted/account/play-token), so answer from the
+  // local store. Without this branch every logged-in join fetches
+  // https://api.<DOMAIN>/users/@me — which does not exist here — and the join
+  // is closed as unauthorized, so only guests can play.
+  if (ServerEnv.selfHosted()) {
+    const account = selfHostedAccountStore().accountById(token);
+    if (account === null) {
+      return {
+        type: "error",
+        status: 401,
+        message: "No self-hosted account for token",
+      };
+    }
+    return { type: "success", response: selfHostedUserMe(account) };
+  }
+
   try {
     // Get the user object
     const response = await fetch(ServerEnv.jwtIssuer() + "/users/@me", {

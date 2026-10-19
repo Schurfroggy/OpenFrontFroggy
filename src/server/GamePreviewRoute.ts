@@ -48,6 +48,9 @@ export function registerGamePreviewRoute(opts: {
     gameID: string,
   ): Promise<ExternalGameInfo | null> => {
     if (!gameIDSchema.safeParse(gameID).success) return null;
+    // Self-hosted servers have no central archive to ask, and the fetch would
+    // only stall the page behind its timeout before failing anyway.
+    if (ServerEnv.selfHosted()) return null;
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 1500);

@@ -244,6 +244,16 @@ export class LangSelector extends LitElement {
 
   private applyTranslation() {
     const components = [
+      // The nav bars render before the language file has been fetched, so
+      // everything they build with translateText() (the self-hosted 好友 and
+      // 管理 items) is stuck on the raw key unless they are re-rendered here.
+      // Their data-i18n siblings were never affected — that pass below covers
+      // them — which is exactly why only these two showed as MAIN.FRIENDS /
+      // MAIN.ADMIN.
+      "desktop-nav-bar",
+      "mobile-nav-bar",
+      "friends-modal",
+      "friend-invite-banner",
       "single-player-modal",
       "host-lobby-modal",
       "map-picker",

@@ -89,4 +89,26 @@ describe("LangSelector language loading", () => {
     // The array value is dropped, not flattened.
     expect(warn).toHaveBeenCalledWith("Unknown type", "object", [1, 2]);
   });
+
+  it("re-renders the nav bars, whose labels are built with translateText", () => {
+    // The nav renders before the language file lands, so anything it resolves
+    // through translateText() (the self-hosted 好友 and 管理 items) keeps the
+    // raw key unless applyTranslation re-renders it. Its data-i18n siblings are
+    // rewritten below and never showed the bug.
+    const desktop = document.createElement("desktop-nav-bar") as HTMLElement & {
+      requestUpdate: () => void;
+    };
+    desktop.requestUpdate = vi.fn();
+    const mobile = document.createElement("mobile-nav-bar") as HTMLElement & {
+      requestUpdate: () => void;
+    };
+    mobile.requestUpdate = vi.fn();
+    document.body.append(desktop, mobile);
+
+    const selector = makeSelector({ "main.title": "OpenFront" });
+    (selector as unknown as { applyTranslation(): void }).applyTranslation();
+
+    expect(desktop.requestUpdate).toHaveBeenCalled();
+    expect(mobile.requestUpdate).toHaveBeenCalled();
+  });
 });

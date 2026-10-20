@@ -2782,5 +2782,10 @@
     "title_limited": "浏览器正在限制 WebGL",
     "title_software": "硬件加速已关闭",
     "title_unsupported": "不支持 WebGL2"
+  },
+  "nation_names": {
+    "beta": "beta",
+    "toggle": "国名汉化",
+    "toggle_hint": "把地图里的国家、省份名换成中文（目前覆盖 World、Europe、Asia、North America 四张图）。"
   }
 }

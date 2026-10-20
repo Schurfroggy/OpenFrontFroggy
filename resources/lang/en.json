@@ -2643,5 +2643,10 @@
     },
     "you_won": "You Won!",
     "your_team": "Your team won!"
+  },
+  "nation_names": {
+    "beta": "beta",
+    "toggle": "Localize place names",
+    "toggle_hint": "Show Chinese names for countries and provinces on some maps."
   }
 }

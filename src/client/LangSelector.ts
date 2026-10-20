@@ -4,6 +4,12 @@ import { assetUrl } from "../core/AssetUrls";
 import { desktopSteamLocale } from "./DesktopShell";
 import "./LanguageModal";
 import { LanguageModal } from "./LanguageModal";
+import {
+  NATION_NAMES_EVENT,
+  nationNamesEnabled,
+  setNationNamesEnabled,
+  setNationNamesLanguage,
+} from "./NationNames";
 import { formatDebugTranslation } from "./Utils";
 
 import en from "../../resources/lang/en.json";
@@ -41,6 +47,7 @@ export class LangSelector extends LitElement {
       "language-selected",
       this.handleLanguageSelected as EventListener,
     );
+    window.addEventListener(NATION_NAMES_EVENT, this.handleNationNamesChanged);
   }
 
   disconnectedCallback() {
@@ -49,6 +56,29 @@ export class LangSelector extends LitElement {
       "language-selected",
       this.handleLanguageSelected as EventListener,
     );
+    window.removeEventListener(
+      NATION_NAMES_EVENT,
+      this.handleNationNamesChanged,
+    );
+  }
+
+  private handleNationNamesChanged = () => {
+    this.requestUpdate();
+  };
+
+  private toggleNationNames = () => {
+    setNationNamesEnabled(!nationNamesEnabled());
+    this.requestUpdate();
+  };
+
+  /**
+   * The place-name module needs the active language, and displayName() must not
+   * query the DOM for it (once per player per frame). Pushed here, before every
+   * render, so any path that sets currentLang — init, the modal, debug mode —
+   * keeps it in sync.
+   */
+  protected willUpdate(): void {
+    setNationNamesLanguage(this.currentLang);
   }
 
   private handleLanguageSelected = (e: CustomEvent) => {
@@ -412,23 +442,50 @@ export class LangSelector extends LitElement {
             svg: "uk_us_flag",
           });
 
+    // The place-name option only makes sense while the UI itself is Chinese:
+    // it swaps map names into Chinese, so offering it under another language
+    // would produce a mixed UI rather than a translated one.
+    const showNationNames =
+      this.currentLang.toLowerCase().startsWith("zh");
+    const nationNamesOn = nationNamesEnabled();
+
     return html`
-      <button
-        id="lang-selector"
-        title=${this.translateText("select_lang.change_language")}
-        @click=${this.openModal}
-        class="border-none bg-none cursor-pointer p-0 flex items-center justify-center transition-transform duration-200 hover:scale-[1.1] active:scale-[0.9] opacity-60 hover:opacity-100 w-[40px] h-[40px] lg:w-[56px] lg:h-[56px]"
-      >
-        <img
-          id="lang-flag"
-          class="object-contain pointer-events-none transition-all w-[40px] h-[40px] lg:w-[48px] lg:h-[48px]"
-          src=${assetUrl(`flags/${currentLang.svg}.svg`)}
-          alt=${this.translateText("select_lang.flag_alt", {
-            language: currentLang.native,
-          })}
-          draggable="false"
-        />
-      </button>
+      <div class="flex items-center gap-2">
+        ${showNationNames
+          ? html`<button
+              id="nation-names-toggle"
+              type="button"
+              aria-pressed=${nationNamesOn ? "true" : "false"}
+              title=${this.translateText("nation_names.toggle_hint")}
+              @click=${this.toggleNationNames}
+              class="flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest transition-colors ${nationNamesOn
+                ? "border-malibu-blue bg-malibu-blue/20 text-malibu-blue"
+                : "border-white/20 bg-black/30 text-white/60 hover:border-white/40 hover:text-white/90"}"
+            >
+              <span>${this.translateText("nation_names.toggle")}</span>
+              <span
+                class="rounded bg-white/10 px-1 py-px text-[9px] font-normal normal-case tracking-normal"
+                >${this.translateText("nation_names.beta")}</span
+              >
+            </button>`
+          : ""}
+        <button
+          id="lang-selector"
+          title=${this.translateText("select_lang.change_language")}
+          @click=${this.openModal}
+          class="border-none bg-none cursor-pointer p-0 flex items-center justify-center transition-transform duration-200 hover:scale-[1.1] active:scale-[0.9] opacity-60 hover:opacity-100 w-[40px] h-[40px] lg:w-[56px] lg:h-[56px]"
+        >
+          <img
+            id="lang-flag"
+            class="object-contain pointer-events-none transition-all w-[40px] h-[40px] lg:w-[48px] lg:h-[48px]"
+            src=${assetUrl(`flags/${currentLang.svg}.svg`)}
+            alt=${this.translateText("select_lang.flag_alt", {
+              language: currentLang.native,
+            })}
+            draggable="false"
+          />
+        </button>
+      </div>
     `;
   }
 }

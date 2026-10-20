@@ -75,6 +75,36 @@
 
 页脚旁新增了开源属性、原作者团队及支持原项目的说明。
 
+### 3.4 国名汉化（beta）
+
+- 入口：主页面右下角、语言旗帜按钮**左侧**的「国名汉化 beta」。仅在界面语言为中文
+  （`zh` 开头）时渲染；切到其他语言按钮消失，翻译也一并失效。
+- 覆盖范围：`World`、`Europe`、`Asia`、`North America` 四张图，共 169 个地名，数据在
+  `resources/lang/nations/zh-CN.json`（原字符串 → 中文）。未收录的名字回退显示原名。
+- 为什么不放进 `resources/lang/*.json`：地名是地图数据不是 UI 文案；全量 4000+ 条会
+  让每个语言文件膨胀数倍，而且其中有 10 个名字本身带点号（`St. Gallen`、`L.A.X.`），
+  会被语言文件的扁平化逻辑拆成错误的嵌套键。
+- 只影响显示：`PlayerInfo.name` 保持原样，回放哈希与 desync 检测不受影响；
+  `PlayerView.displayName()` / `name()` 只对国家（Nation）和部落（Bot）查表，真人玩家
+  的名字永不翻译。
+- 同名不同地：Europe 的国家 Georgia 与 North America 的美国佐治亚都叫 `Georgia`，
+  用 `<名称>|<旗帜>` 作为覆盖键区分（`Georgia|Georgia_US → 佐治亚`）。
+- 开关保存在 `localStorage.nationNamesZh`，默认关闭。
+
+主要实现：
+
+- `src/client/NationNames.ts`
+- `resources/lang/nations/zh-CN.json`
+- `src/client/view/PlayerView.ts`（`localizePlaceName`）
+- `src/client/LangSelector.ts`（开关按钮）
+
+测试：
+
+```bash
+npx vitest tests/client/NationNames.test.ts --run
+npx vitest tests/client/LangSelectorNationNames.test.ts --run
+```
+
 ## 4. 自托管多人游戏
 
 ### 4.1 启动方式

@@ -32,6 +32,7 @@ import { themeProvider } from "../theme/ThemeProvider";
 import { type CosmeticOwner, visibleCosmetics } from "./CosmeticVisibility";
 import { playerStateFromUpdate, playerStaticFromUpdate } from "./EntityState";
 import { GameView } from "./GameView";
+import { localizeNationName } from "../NationNames";
 import { resolvePlayerColors } from "./PlayerColors";
 import { UnitView } from "./UnitView";
 
@@ -396,12 +397,22 @@ export class PlayerView {
   name(): string {
     return this.anonymousName !== null && userSettings.anonymousNames()
       ? this.anonymousName
-      : this.static.name;
+      : this.localizePlaceName(this.static.name);
   }
   displayName(): string {
     return this.anonymousName !== null && userSettings.anonymousNames()
       ? this.anonymousName
-      : this.static.displayName;
+      : this.localizePlaceName(this.static.displayName);
+  }
+  /**
+   * Optional Chinese names for nations and tribes (see NationNames.ts). Only
+   * players generated from map data are translated: a human's name is their
+   * own text, and the engine's `PlayerInfo.name` is never touched, so replays
+   * and desync hashes are unaffected.
+   */
+  private localizePlaceName(name: string): string {
+    if (this.type() === PlayerType.Human) return name;
+    return localizeNationName(name, this.static.flag);
   }
   clanTag(): string | null {
     return this.anonymousName !== null && userSettings.anonymousNames()

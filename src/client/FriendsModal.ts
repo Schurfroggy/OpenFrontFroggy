@@ -1,5 +1,6 @@
 import { html, nothing } from "lit";
 import { customElement, state } from "lit/decorators.js";
+import { createLobby } from "./Api";
 import { BaseModal } from "./components/BaseModal";
 import { FRIENDS_INBOX_EVENT, pollFriendsInbox } from "./FriendsPolling";
 import { loadSelfHostedAccount } from "./SelfHostedAccount";
@@ -11,6 +12,7 @@ import {
   lookupFriend,
   removeFriend,
   sendFriendRequest,
+  sendGameInvites,
   setGameInviteStatus,
   type FriendLookup,
   type FriendRequest,
@@ -19,6 +21,7 @@ import {
   type GameInvite,
 } from "./SelfHostedFriends";
 import { showToast, translateText } from "./Utils";
+import type { JoinLobbyEvent } from "./Main";
 
 type FriendsTab = "friends" | "requests" | "invites";
 
@@ -48,12 +51,16 @@ export class FriendsModal extends BaseModal {
   @state() private lookup: FriendLookup | null = null;
   @state() private lookupError = "";
   @state() private busy = false;
+  // Created on the first invite and reused for the rest of the visit, so two
+  // clicks never mint two rooms.
+  private room: { gameID: string; creatorToken: string } | null = null;
 
   protected onOpen(): void {
     this.error = "";
     this.lookup = null;
     this.lookupError = "";
     this.loading = true;
+    this.room = null;
     window.addEventListener(FRIENDS_INBOX_EVENT, this.onInbox);
     void this.refresh();
   }
@@ -259,7 +266,7 @@ export class FriendsModal extends BaseModal {
         </div>
         <div class="flex flex-wrap gap-2">
           <input
-            class="min-w-0 flex-1 rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-sm outline-none focus:border-malibu-blue"
+            class="min-w-0 flex-1 rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-sm text-white placeholder-white/40 outline-none focus:border-malibu-blue"
             .value=${this.query}
             placeholder=${translateText("friends.add_placeholder")}
             maxlength="20"
@@ -303,13 +310,22 @@ export class FriendsModal extends BaseModal {
                         })}
                       </div>
                     </div>
-                    <button
-                      class="rounded-lg border border-red-400/30 px-3 py-1.5 text-xs text-red-200 hover:bg-red-400/10 disabled:opacity-50"
-                      ?disabled=${this.busy}
-                      @click=${() => void this.confirmRemove(friend.username)}
-                    >
-                      ${translateText("friends.remove")}
-                    </button>
+                    <div class="flex shrink-0 gap-2">
+                      <button
+                        class="rounded-lg bg-malibu-blue px-3 py-1.5 text-xs font-bold text-zinc-900 hover:brightness-110 disabled:opacity-50"
+                        ?disabled=${this.busy}
+                        @click=${() => void this.inviteFriend(friend.username)}
+                      >
+                        ${translateText("friends.invite")}
+                      </button>
+                      <button
+                        class="rounded-lg border border-red-400/30 px-3 py-1.5 text-xs text-red-200 hover:bg-red-400/10 disabled:opacity-50"
+                        ?disabled=${this.busy}
+                        @click=${() => void this.confirmRemove(friend.username)}
+                      >
+                        ${translateText("friends.remove")}
+                      </button>
+                    </div>
                   </li>
                 `,
               )}
@@ -388,6 +404,60 @@ export class FriendsModal extends BaseModal {
     if (request === undefined) return;
     const ok = await this.run(() => acceptFriendRequest(request.id));
     if (ok) showToast(translateText("friends.request_accepted"), "green");
+  }
+
+  /** One click: mint a default private room, invite this friend, and drop the
+   * host into it — the same "join-lobby" path the host modal uses, so the room
+   * behaves exactly like one created from Create Lobby. */
+  private async inviteFriend(username: string): Promise<void> {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      const room = await this.ensureRoom();
+      if (room === null) {
+        showToast(translateText("friends.error_generic"), "red");
+        return;
+      }
+      const sent = await sendGameInvites(room.gameID, [username]);
+      if (!sent.ok) {
+        showToast(this.errorText(sent.error), "red");
+        return;
+      }
+      showToast(
+        translateText("friends.invite_sent", { count: sent.data.invited }),
+        "green",
+      );
+      this.close();
+      this.dispatchEvent(
+        new CustomEvent<JoinLobbyEvent>("join-lobby", {
+          detail: {
+            gameID: room.gameID,
+            source: "host",
+            creatorToken: room.creatorToken,
+          },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  private async ensureRoom(): Promise<{
+    gameID: string;
+    creatorToken: string;
+  } | null> {
+    if (this.room !== null) return this.room;
+    try {
+      // No config: the server's documented defaults (World / Normal / Easy /
+      // FFA private room) are the "默认房间" this button promises.
+      const { lobby, creatorToken } = await createLobby();
+      this.room = { gameID: lobby.gameID, creatorToken };
+      return this.room;
+    } catch {
+      return null;
+    }
   }
 
   private async confirmRemove(username: string): Promise<void> {

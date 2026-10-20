@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   loadSelfHostedAccount: vi.fn(),
   showToast: vi.fn(),
   pollFriendsInbox: vi.fn(),
+  createLobby: vi.fn(),
 }));
 
 vi.mock("../../src/client/SelfHostedFriends", () => ({
@@ -31,6 +32,10 @@ vi.mock("../../src/client/SelfHostedFriends", () => ({
 
 vi.mock("../../src/client/SelfHostedAccount", () => ({
   loadSelfHostedAccount: mocks.loadSelfHostedAccount,
+}));
+
+vi.mock("../../src/client/Api", () => ({
+  createLobby: mocks.createLobby,
 }));
 
 vi.mock("../../src/client/FriendsPolling", () => ({
@@ -94,6 +99,10 @@ beforeEach(() => {
     ok: true,
     data: { invited: 1, skipped: [] },
   });
+  mocks.createLobby.mockResolvedValue({
+    lobby: { gameID: "gameNEW01" },
+    creatorToken: "creator-token",
+  });
   window.showPage = vi.fn() as unknown as typeof window.showPage;
 });
 
@@ -154,6 +163,36 @@ describe("friends-modal", () => {
 
     expect(modal.textContent).toContain("friends.guest");
     expect(mocks.loadFriends).not.toHaveBeenCalled();
+  });
+
+  it("keeps the search input readable on its dark background", async () => {
+    const modal = await openFriendsModal();
+    const input = modal.querySelector("input") as HTMLInputElement;
+    // The app's global input rule paints text black; without text-white this
+    // box is black-on-black.
+    expect(input.className).toContain("text-white");
+  });
+
+  it("creates a default room and invites a friend from the list", async () => {
+    const modal = await openFriendsModal();
+    const joined: Array<Record<string, unknown>> = [];
+    document.addEventListener("join-lobby", (event) => {
+      joined.push(
+        (event as unknown as CustomEvent<Record<string, unknown>>).detail,
+      );
+    });
+
+    buttonByText(modal, "friends.invite")?.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await modal.updateComplete;
+
+    expect(mocks.createLobby).toHaveBeenCalledTimes(1);
+    expect(mocks.sendGameInvites).toHaveBeenCalledWith("gameNEW01", ["Bob"]);
+    expect(joined[0]).toMatchObject({
+      gameID: "gameNEW01",
+      source: "host",
+      creatorToken: "creator-token",
+    });
   });
 
   it("shows pending invitations and enters the lobby they name", async () => {

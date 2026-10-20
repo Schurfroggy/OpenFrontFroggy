@@ -2089,9 +2089,10 @@ export async function createLobby(
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        ...(gameConfig === undefined
-          ? {}
-          : { body: JSON.stringify(gameConfig) }),
+        // Express 5 leaves req.body undefined when the request has no body,
+        // so a config-less create must still send one: the server's own empty
+        // object branch is what fills in the default room settings.
+        body: JSON.stringify(gameConfig ?? {}),
       },
     );
 

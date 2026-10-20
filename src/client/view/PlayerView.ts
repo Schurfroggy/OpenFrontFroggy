@@ -32,7 +32,10 @@ import { themeProvider } from "../theme/ThemeProvider";
 import { type CosmeticOwner, visibleCosmetics } from "./CosmeticVisibility";
 import { playerStateFromUpdate, playerStaticFromUpdate } from "./EntityState";
 import { GameView } from "./GameView";
-import { localizeNationName } from "../NationNames";
+import {
+  localizeNationName,
+  localizeNationNameForMap,
+} from "../NationNames";
 import { resolvePlayerColors } from "./PlayerColors";
 import { UnitView } from "./UnitView";
 
@@ -410,6 +413,19 @@ export class PlayerView {
    * own text, and the engine's `PlayerInfo.name` is never touched, so replays
    * and desync hashes are unaffected.
    */
+  /**
+   * The name drawn on the map. Same as displayName(), except that a name the
+   * glyph atlas cannot render falls back to the original: see
+   * localizeNationNameForMap.
+   */
+  labelName(): string {
+    if (this.anonymousName !== null && userSettings.anonymousNames()) {
+      return this.anonymousName;
+    }
+    if (this.type() === PlayerType.Human) return this.static.displayName;
+    return localizeNationNameForMap(this.static.displayName, this.static.flag);
+  }
+
   private localizePlaceName(name: string): string {
     if (this.type() === PlayerType.Human) return name;
     return localizeNationName(name, this.static.flag);

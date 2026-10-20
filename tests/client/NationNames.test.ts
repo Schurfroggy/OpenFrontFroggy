@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   localizeNationName,
+  localizeNationNameForMap,
   nationNamesEnabled,
   setNationNamesEnabled,
   setNationNamesLanguage,
@@ -55,6 +56,19 @@ describe("localizeNationName", () => {
     expect(localizeNationName("Georgia")).toBe("格鲁吉亚");
   });
 
+
+  it("keeps the on-map label in a script the glyph atlas can draw", () => {
+    setNationNamesEnabled(true);
+    // The map's text renderer indexes a Latin-only MSDF atlas (char codes
+    // 0..383), so a Chinese label would draw garbage there.
+    expect(localizeNationName("United States")).toBe("美国");
+    expect(localizeNationNameForMap("United States")).toBe("United States");
+    expect(localizeNationNameForMap("Georgia", "/flags/Georgia_US.svg")).toBe(
+      "Georgia",
+    );
+    // Uncovered names pass through unchanged either way.
+    expect(localizeNationNameForMap("Murmansk")).toBe("Murmansk");
+  });
   it("does nothing while the UI language is not Chinese", () => {
     setNationNamesEnabled(true);
     useLanguage("de");

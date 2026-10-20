@@ -207,7 +207,7 @@ export class WebGLFrameBuilder {
   refreshNames(gameView: GameView): void {
     const displayNames = new Map<string, string>();
     for (const p of gameView.players()) {
-      displayNames.set(p.id(), p.displayName());
+      displayNames.set(p.id(), p.labelName());
     }
     this.view.refreshNames(displayNames);
   }
@@ -554,9 +554,10 @@ export class WebGLFrameBuilder {
 
     return {
       ...p.static,
-      // displayName() honors the anonymous-names setting; static.displayName
-      // is always the real name.
-      displayName: p.displayName(),
+      // labelName() honors the anonymous-names setting and keeps a name the
+      // glyph atlas cannot draw (e.g. a localized place name) in its original
+      // form, so the map never renders garbage.
+      displayName: p.labelName(),
       flag: flagUrl,
       crown: crownUrl,
       verified: p.cosmetics.verified === true,

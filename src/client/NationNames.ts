@@ -69,6 +69,28 @@ export function localizeNationName(
   return names[name] ?? name;
 }
 
+/**
+ * The on-map label. The name pass draws text from a pre-baked MSDF glyph atlas
+ * whose tables are indexed by char code up to CHAR_RANGE (384 in
+ * render/gl/passes/name-pass/Types.ts), covering Latin-1 + Latin Extended-A and
+ * nothing else. A Chinese name would index past the tables and draw garbage
+ * ("-Ipa", "-<"), so the map keeps the original string and the Chinese one is
+ * left to the DOM surfaces (hover panel, info overlay, leaderboard).
+ */
+export function localizeNationNameForMap(
+  name: string,
+  flag?: string | null,
+): string {
+  const localized = localizeNationName(name, flag);
+  for (let i = 0; i < localized.length; i++) {
+    if (localized.charCodeAt(i) >= MAP_LABEL_CHAR_RANGE) return name;
+  }
+  return localized;
+}
+
+/** Mirrors CHAR_RANGE in render/gl/passes/name-pass/Types.ts. */
+const MAP_LABEL_CHAR_RANGE = 384;
+
 function flagCode(flag: string): string {
   const base = flag.split("/").pop() ?? flag;
   return base.replace(/\.svg$/i, "");

@@ -56,6 +56,7 @@ import {
 } from "./InputHandler";
 import { pagePin } from "./PagePin";
 import { groupTokenOf, loggableStartMessage } from "./PresenceGroup";
+import { NATION_NAMES_EVENT } from "./NationNames";
 import { versionedPathForMismatchedGame } from "./ServerList";
 import { reportGameError } from "./Telemetry";
 import { terrainMapFileLoader } from "./TerrainMapFileLoader";
@@ -776,6 +777,15 @@ async function createClientGame(
         webglBuilder.refreshNames(gameView);
         gameView.invalidateTeamClanTags();
       },
+      { signal: graphicsListenerAbort.signal },
+    );
+
+    // The place-name option decides which names the GL pass may draw at all:
+    // the ones the DOM overlay owns must be blanked there, and un-blanked when
+    // the option is switched off.
+    globalThis.addEventListener(
+      NATION_NAMES_EVENT,
+      () => webglBuilder.refreshNames(gameView),
       { signal: graphicsListenerAbort.signal },
     );
 

@@ -23,6 +23,7 @@ import { FrameProfiler } from "./FrameProfiler";
 import { ActionableEvents } from "./layers/ActionableEvents";
 import { AlertFrame } from "./layers/AlertFrame";
 import { AttacksDisplay } from "./layers/AttacksDisplay";
+import { NationLabelOverlay } from "./layers/NationLabelOverlay";
 import { BuildMenu } from "./layers/BuildMenu";
 import { ChatDisplay } from "./layers/ChatDisplay";
 import { ChatModal } from "./layers/ChatModal";
@@ -163,6 +164,14 @@ export function createRenderer(
   playerInfo.eventBus = eventBus;
   playerInfo.transform = transformHandler;
   playerInfo.game = game;
+
+  const nationLabels = document.querySelector(
+    "nation-label-overlay",
+  ) as NationLabelOverlay;
+  if (nationLabels instanceof NationLabelOverlay) {
+    nationLabels.transform = transformHandler;
+    nationLabels.game = game;
+  }
 
   const winModal = document.querySelector("win-modal") as WinModal;
   if (!(winModal instanceof WinModal)) {

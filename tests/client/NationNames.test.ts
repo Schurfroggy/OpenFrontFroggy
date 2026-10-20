@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   localizeNationName,
-  localizeNationNameForMap,
   nationNamesEnabled,
   setNationNamesEnabled,
   setNationNamesLanguage,
+  translatedPlaceName,
 } from "../../src/client/NationNames";
 
 // <lang-selector> pushes its language here; the tests do the same.
@@ -57,17 +57,15 @@ describe("localizeNationName", () => {
   });
 
 
-  it("keeps the on-map label in a script the glyph atlas can draw", () => {
+  it("reports which names have a translation and which do not", () => {
     setNationNamesEnabled(true);
-    // The map's text renderer indexes a Latin-only MSDF atlas (char codes
-    // 0..383), so a Chinese label would draw garbage there.
-    expect(localizeNationName("United States")).toBe("美国");
-    expect(localizeNationNameForMap("United States")).toBe("United States");
-    expect(localizeNationNameForMap("Georgia", "/flags/Georgia_US.svg")).toBe(
-      "Georgia",
-    );
-    // Uncovered names pass through unchanged either way.
-    expect(localizeNationNameForMap("Murmansk")).toBe("Murmansk");
+    // translatedPlaceName() is what the map overlay draws and what tells the
+    // Latin-only glyph-atlas pass to blank its own copy.
+    expect(translatedPlaceName("United States")).toBe("美国");
+    expect(translatedPlaceName("Murmansk")).toBeNull();
+    expect(translatedPlaceName("Georgia", "Georgia_US")).toBe("佐治亚");
+    setNationNamesEnabled(false);
+    expect(translatedPlaceName("United States")).toBeNull();
   });
   it("does nothing while the UI language is not Chinese", () => {
     setNationNamesEnabled(true);

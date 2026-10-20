@@ -33,8 +33,9 @@ import { type CosmeticOwner, visibleCosmetics } from "./CosmeticVisibility";
 import { playerStateFromUpdate, playerStaticFromUpdate } from "./EntityState";
 import { GameView } from "./GameView";
 import {
+  isMapLabelOverlayActive,
   localizeNationName,
-  localizeNationNameForMap,
+  translatedPlaceName,
 } from "../NationNames";
 import { resolvePlayerColors } from "./PlayerColors";
 import { UnitView } from "./UnitView";
@@ -56,6 +57,12 @@ export class PlayerView {
   public state: PlayerState;
   /** Static header data — set once at construction, never mutated. */
   public static: PlayerStatic;
+  /**
+   * The nation's flag code from the map manifest (e.g. "ge" for the country
+   * versus "Georgia_US" for the US state). Only place-name localization reads
+   * it, to tell two regions with the same name apart.
+   */
+  public readonly nationFlag: string | null;
   /** The equipped cosmetics this client draws. */
   public cosmetics!: PlayerCosmetics;
 
@@ -92,6 +99,7 @@ export class PlayerView {
       this.state.outgoingEmojis = [];
     }
     this.static = playerStaticFromUpdate(data);
+    this.nationFlag = data.nationFlag ?? null;
 
     // First emission always carries name + playerType (see playerStaticFromUpdate).
     if (data.clientID === game.myClientID()) {
@@ -414,21 +422,29 @@ export class PlayerView {
    * and desync hashes are unaffected.
    */
   /**
-   * The name drawn on the map. Same as displayName(), except that a name the
-   * glyph atlas cannot render falls back to the original: see
-   * localizeNationNameForMap.
+   * The name the map's own glyph-atlas pass should draw.
+   *
+   * That atlas is Latin-only, so a place with a Chinese translation is drawn by
+   * <nation-label-overlay> instead and blanked here — drawing both would stack
+   * two names on the same spot, and drawing the Chinese through the atlas
+   * produces garbage.
    */
-  labelName(): string {
+  mapLabelName(): string {
     if (this.anonymousName !== null && userSettings.anonymousNames()) {
       return this.anonymousName;
     }
     if (this.type() === PlayerType.Human) return this.static.displayName;
-    return localizeNationNameForMap(this.static.displayName, this.static.flag);
+    // Blank only when the DOM overlay is actually running (it is not, for
+    // example, in the replay shell): otherwise the GL name would vanish.
+    if (!isMapLabelOverlayActive()) return this.static.displayName;
+    return translatedPlaceName(this.static.displayName, this.nationFlag) !== null
+      ? ""
+      : this.static.displayName;
   }
 
   private localizePlaceName(name: string): string {
     if (this.type() === PlayerType.Human) return name;
-    return localizeNationName(name, this.static.flag);
+    return localizeNationName(name, this.nationFlag);
   }
   clanTag(): string | null {
     return this.anonymousName !== null && userSettings.anonymousNames()

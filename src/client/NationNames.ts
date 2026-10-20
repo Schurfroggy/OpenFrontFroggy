@@ -40,6 +40,19 @@ export function setNationNamesLanguage(lang: string): void {
   uiLang = lang;
 }
 
+// Set by <nation-label-overlay> while it is running. Without it the GL name
+// pass must keep drawing every name: blanking is only safe when something else
+// is actually painting the translated label (a replay shell has no overlay).
+let mapLabelOverlayActive = false;
+
+export function setMapLabelOverlayActive(active: boolean): void {
+  mapLabelOverlayActive = active;
+}
+
+export function isMapLabelOverlayActive(): boolean {
+  return mapLabelOverlayActive;
+}
+
 export function setNationNamesEnabled(on: boolean): void {
   enabled = on;
   try {
@@ -59,37 +72,28 @@ export function localizeNationName(
   name: string,
   flag?: string | null,
 ): string {
-  if (!nationNamesEnabled()) return name;
+  return translatedPlaceName(name, flag) ?? name;
+}
+
+/**
+ * The Chinese name for a place, or null when this name has no translation (or
+ * the option is off). Null is the signal the map uses to keep drawing it with
+ * its own glyph atlas.
+ */
+export function translatedPlaceName(
+  name: string,
+  flag?: string | null,
+): string | null {
+  if (!nationNamesEnabled()) return null;
   if (flag) {
     // Same string, two places: the country "Georgia" in Europe and the US
     // state on the North America map. The manifest flag tells them apart.
     const override = names[`${name}|${flagCode(flag)}`];
     if (override !== undefined) return override;
   }
-  return names[name] ?? name;
+  return names[name] ?? null;
 }
 
-/**
- * The on-map label. The name pass draws text from a pre-baked MSDF glyph atlas
- * whose tables are indexed by char code up to CHAR_RANGE (384 in
- * render/gl/passes/name-pass/Types.ts), covering Latin-1 + Latin Extended-A and
- * nothing else. A Chinese name would index past the tables and draw garbage
- * ("-Ipa", "-<"), so the map keeps the original string and the Chinese one is
- * left to the DOM surfaces (hover panel, info overlay, leaderboard).
- */
-export function localizeNationNameForMap(
-  name: string,
-  flag?: string | null,
-): string {
-  const localized = localizeNationName(name, flag);
-  for (let i = 0; i < localized.length; i++) {
-    if (localized.charCodeAt(i) >= MAP_LABEL_CHAR_RANGE) return name;
-  }
-  return localized;
-}
-
-/** Mirrors CHAR_RANGE in render/gl/passes/name-pass/Types.ts. */
-const MAP_LABEL_CHAR_RANGE = 384;
 
 function flagCode(flag: string): string {
   const base = flag.split("/").pop() ?? flag;

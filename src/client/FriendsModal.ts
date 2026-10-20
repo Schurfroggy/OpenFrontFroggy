@@ -427,18 +427,7 @@ export class FriendsModal extends BaseModal {
         translateText("friends.invite_sent", { count: sent.data.invited }),
         "green",
       );
-      this.close();
-      this.dispatchEvent(
-        new CustomEvent<JoinLobbyEvent>("join-lobby", {
-          detail: {
-            gameID: room.gameID,
-            source: "host",
-            creatorToken: room.creatorToken,
-          },
-          bubbles: true,
-          composed: true,
-        }),
-      );
+      this.enterRoom(room);
     } finally {
       this.busy = false;
     }
@@ -458,6 +447,41 @@ export class FriendsModal extends BaseModal {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Show the host view for the room we just minted. Dispatching join-lobby
+   * alone only connects the socket -- the lobby UI is rendered by
+   * <host-lobby-modal>, so a bare join leaves the host inside a lobby with
+   * nothing on screen. Binding the modal to the existing id is the same path
+   * the ?host successor link uses: it joins AND shows the lobby, without
+   * creating a second room.
+   */
+  private enterRoom(room: { gameID: string; creatorToken: string }): void {
+    this.close();
+    const hostView = document.getElementById("page-host-lobby") as
+      | (HTMLElement & {
+          open(args: { existingLobbyId: string }): void;
+        })
+      | null;
+    if (hostView !== null && typeof hostView.open === "function") {
+      // open() reveals the inline page itself; calling showPage first would
+      // run it once with no args and mint a second, empty lobby.
+      hostView.open({ existingLobbyId: room.gameID });
+      return;
+    }
+    // No host view mounted (tests, or a shell without it): still join.
+    this.dispatchEvent(
+      new CustomEvent<JoinLobbyEvent>("join-lobby", {
+        detail: {
+          gameID: room.gameID,
+          source: "host",
+          creatorToken: room.creatorToken,
+        },
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 
   private async confirmRemove(username: string): Promise<void> {

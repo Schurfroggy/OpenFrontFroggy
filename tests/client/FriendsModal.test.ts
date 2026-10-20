@@ -173,7 +173,31 @@ describe("friends-modal", () => {
     expect(input.className).toContain("text-white");
   });
 
-  it("creates a default room and invites a friend from the list", async () => {
+  it("creates a default room and opens the host view on it", async () => {
+    // The lobby UI is rendered by <host-lobby-modal>; joining without binding
+    // it leaves the host in a lobby with nothing on screen, which is exactly
+    // the bug this asserts against.
+    const hostView = document.createElement("div") as HTMLDivElement & {
+      open: (args: { existingLobbyId: string }) => void;
+    };
+    hostView.id = "page-host-lobby";
+    hostView.open = vi.fn();
+    document.body.appendChild(hostView);
+
+    const modal = await openFriendsModal();
+    buttonByText(modal, "friends.invite")?.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await modal.updateComplete;
+
+    expect(mocks.createLobby).toHaveBeenCalledTimes(1);
+    expect(mocks.sendGameInvites).toHaveBeenCalledWith("gameNEW01", ["Bob"]);
+    expect(hostView.open).toHaveBeenCalledWith({
+      existingLobbyId: "gameNEW01",
+    });
+    hostView.remove();
+  });
+
+  it("still joins when no host view is mounted", async () => {
     const modal = await openFriendsModal();
     const joined: Array<Record<string, unknown>> = [];
     document.addEventListener("join-lobby", (event) => {
@@ -186,8 +210,6 @@ describe("friends-modal", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     await modal.updateComplete;
 
-    expect(mocks.createLobby).toHaveBeenCalledTimes(1);
-    expect(mocks.sendGameInvites).toHaveBeenCalledWith("gameNEW01", ["Bob"]);
     expect(joined[0]).toMatchObject({
       gameID: "gameNEW01",
       source: "host",

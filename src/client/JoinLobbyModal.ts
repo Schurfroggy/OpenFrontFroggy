@@ -32,6 +32,7 @@ import { normaliseMapKey } from "./Utils";
 import { findVersionedShell } from "./VersionedReplay";
 import { BaseModal } from "./components/BaseModal";
 import "./components/CopyButton";
+import "./components/FriendInviteButton";
 import { GameStartAlertController } from "./components/GameStartAlertController";
 import "./components/LobbyConfigItem";
 import "./components/LobbyPlayerView";
@@ -149,13 +150,27 @@ export class JoinLobbyModal extends BaseModal {
         ${this.gameStartAlert.renderBell()}`,
       onBack: () => this.closeAndLeave(),
       ariaLabel: translateText("common.close"),
-      // Only pair them behind a wrapper when both are present, so a browser --
-      // which never gets the invite button -- renders exactly the markup it
-      // rendered before this change.
-      rightContent:
-        copy && invite
-          ? html`<div class="flex items-center gap-2">${copy}${invite}</div>`
-          : (copy ?? invite),
+      // Only pair them behind a wrapper when one is present, so a browser --
+      // which never gets the Steam invite button -- renders exactly the markup
+      // it rendered before this change.
+      rightContent: (() => {
+        // The friends list joins the copy button for the same lobbies the
+        // Steam invite serves: never public FFA, where inviting a friend into
+        // an every-man-for-himself match would just encourage teaming.
+        const friends =
+          this.currentLobbyId !== null &&
+          this.gameConfig !== null &&
+          !isPublicFfa
+            ? html`<friend-invite-button
+                .gameID=${this.currentLobbyId}
+              ></friend-invite-button>`
+            : undefined;
+        return copy ?? friends ?? invite
+          ? html`<div class="flex items-center gap-2">
+              ${copy}${friends}${invite}
+            </div>`
+          : undefined;
+      })(),
     });
   }
 

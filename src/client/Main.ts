@@ -100,8 +100,11 @@ import {
 } from "./PresenceGroup";
 import { RewardsModal } from "./RewardsModal";
 import { loadSelfHostedAccount } from "./SelfHostedAccount";
+import "./FriendsModal";
 import "./SelfHostedAccountModal";
 import "./SelfHostedAdminModal";
+import "./components/FriendInviteBanner";
+import { startFriendsPolling } from "./FriendsPolling";
 import {
   ensureServerList,
   redirectToGameVersion,
@@ -661,6 +664,16 @@ class Client {
           this.storeModal.refresh();
         }, 50);
       }
+    });
+
+    // A friend's invitation lands here: the friends page and the invite banner
+    // both dispatch instead of navigating on their own, so "enter the lobby"
+    // means exactly what a shared /game/<id> link means — including the
+    // confirm prompt when the player is already inside a match.
+    window.addEventListener("selfHostedGameInvite", (event: Event) => {
+      const gameID = (event as CustomEvent<{ gameID?: unknown }>).detail
+        ?.gameID;
+      if (typeof gameID === "string") void this.openInvite(gameID);
     });
 
     this.tokenLoginModal = document.querySelector(
@@ -2059,6 +2072,11 @@ const bootstrap = () => {
   initLayout();
   new Client().initialize();
   initNavigation();
+
+  // One inbox poller for the whole page: it backs the nav badge, the invite
+  // banner and the friends page, and it no-ops for guests (it checks the
+  // cached account before touching the network).
+  if (ClientEnv.selfHosted?.() === true) startFriendsPolling();
 
   // Hide elements immediately
   hideCrazyGamesElements();

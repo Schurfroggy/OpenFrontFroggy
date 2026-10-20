@@ -178,6 +178,50 @@ npm run account:reset -- Froggy
 
 命令只在终端显示一次临时密码，并注销该账号的旧会话。任何文档和仓库中都不应记录用户密码、临时密码或私钥内容。
 
+### 6.3 好友与对局邀请
+
+- 入口：顶部导航“我的”左侧新增“好友”，仅自建版出现。按钮始终可见；
+  未登录点击只提示“请先登录”，不会跳转（页面本身也保留同样的提示）。
+- 加好友方式（方案 A）：按用户名精确搜索 → 发送请求 → 对方在“请求”标签同意。
+  服务器上用户名唯一，所以不需要再造好友码。
+- 好友列表不区分在线/离线：邀请落库保存，好友稍后上线仍能看到。
+- 局内邀请：大厅右上角在邀请码旁边并排一个“好友”按钮，列出全部好友逐个邀请，
+  也可“全部邀请”；邀请码入口原样保留，用于对方未注册或不在好友列表的情况。
+- 收到邀请：顶部横幅“X 邀请你加入一场对局”，可“进入对局”或“忽略”；
+  同时“好友”导航出现未读角标，好友页“邀请”标签也能进入。
+- “进入对局”复用分享链接的既有链路（`Main.openInvite` → `/game/<id>`），
+  因此对局中收到邀请会先弹退出确认，接受后整页跳转，行为与点开链接完全一致。
+- 送达机制：登录状态下每 10 秒轮询 `/api/self-hosted/inbox`，页面隐藏时暂停，
+  内容变化时才派发事件（导航角标、横幅、好友页共用同一个轮询器）。
+- 邀请有效期 30 分钟；同一局对同一人重复邀请是幂等的（刷新有效期，不产生重复）。
+- 限流：好友请求 20 次/小时，对局邀请 30 次/10 分钟，好友上限 200。
+
+数据与安全：
+
+- 新增 4 张表：`self_hosted_friends`、`self_hosted_friend_requests`、
+  `self_hosted_game_invites`，全部 `CREATE TABLE IF NOT EXISTS`，老库直接升级。
+- 表内以 `account.id` 关联，但**接口只返回用户名**：`account.id` 同时是
+  play-token（`/api/self-hosted/account/play-token`），一旦外泄等于身份被盗用。
+- 数据库连接与账号库共用（`SelfHostedAccountStore.db`），只有 master 进程写这几张表。
+- 邀请请求只携带对局 ID，不含任何令牌。
+
+主要实现：
+
+- `src/server/SelfHostedFriendsStore.ts`
+- `src/server/Master.ts`（`/api/self-hosted/friends*`、`/invites`、`/inbox`）
+- `src/client/SelfHostedFriends.ts`
+- `src/client/FriendsPolling.ts`
+- `src/client/FriendsModal.ts`
+- `src/client/components/FriendInviteButton.ts`
+- `src/client/components/FriendInviteBanner.ts`
+
+测试：
+
+```bash
+npx vitest tests/server/SelfHostedFriendsStore.test.ts --run
+npx vitest tests/client/FriendsModal.test.ts --run
+```
+
 ## 7. 本地成就系统
 
 - 成就绑定登录账号，而不是浏览器 UUID。

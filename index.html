@@ -321,6 +321,7 @@
       <homepage-promos></homepage-promos>
       <% } %>
       <banned-modal></banned-modal>
+      <friend-invite-banner></friend-invite-banner>
       <% if (typeof selfHosted === "undefined" || (selfHosted !== "true" &&
       selfHosted !== true)) { %>
       <marketing-consent-toast></marketing-consent-toast>
@@ -330,6 +331,11 @@
       <!-- Main container with responsive padding -->
       <main-layout class="contents">
         <play-page class="contents"></play-page>
+        <friends-modal
+          id="page-friends"
+          inline
+          class="hidden w-full h-full page-content relative z-50"
+        ></friends-modal>
         <self-hosted-account-modal
           id="page-self-hosted-account"
           inline

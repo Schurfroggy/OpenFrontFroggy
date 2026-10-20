@@ -7,6 +7,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { z } from "zod";
 import { SelfHostedAchievementRecordSchema } from "../core/SelfHostedAchievements";
+import { GAME_ID_REGEX } from "../core/Schemas";
 import { GameEnv } from "../core/configuration/Config";
 import {
   applyCheckinState,
@@ -28,10 +29,12 @@ import { setNoStoreHeaders } from "./NoStoreHeaders";
 import { startPolling } from "./PollingLoop";
 import { renderAppShell } from "./RenderHtml";
 import {
+  SelfHostedAccount,
   SelfHostedAccountStore,
   selfHostedSessionMaxAgeSeconds,
 } from "./SelfHostedAccountStore";
 import { SelfHostedAchievementStore } from "./SelfHostedAchievementStore";
+import { SelfHostedFriendsStore } from "./SelfHostedFriendsStore";
 import { ServerEnv } from "./ServerEnv";
 import { applyStaticAssetCacheControl } from "./StaticAssetCache";
 
@@ -432,6 +435,172 @@ app.post("/api/self-hosted/achievements", (req, res) => {
     playerName: account.username,
   });
   res.status(204).end();
+});
+
+// ---- Friends and game invites (self-hosted only) ----
+//
+// Registered players only: a guest has no stable identity to befriend, and the
+// nav item says so before it ever reaches these routes. Every response speaks
+// in usernames — never `account.id`, which doubles as the play token.
+
+let selfHostedFriendsStore: SelfHostedFriendsStore | null = null;
+
+function friendsStore(): SelfHostedFriendsStore {
+  // Shares the account store's connection: the friends tables carry foreign
+  // keys into self_hosted_accounts, so that connection has to exist first.
+  selfHostedFriendsStore ??= new SelfHostedFriendsStore(accountStore().db);
+  return selfHostedFriendsStore;
+}
+
+function selfHostedPlayer(
+  req: express.Request,
+  res: express.Response,
+): SelfHostedAccount | null {
+  if (!ServerEnv.selfHosted()) {
+    res.status(404).json({ error: "not_found" });
+    return null;
+  }
+  const account = accountStore().accountForSession(sessionToken(req));
+  if (!account) {
+    res.status(401).json({ error: "guest" });
+    return null;
+  }
+  return account;
+}
+
+const friendUsernameSchema = z.object({
+  username: z.string().trim().min(1).max(20),
+});
+const friendInviteSchema = z.object({
+  gameID: z.string().regex(GAME_ID_REGEX),
+  to: z.array(z.string().trim().min(1).max(20)).min(1).max(50),
+});
+
+app.get("/api/self-hosted/friends", (req, res) => {
+  const account = selfHostedPlayer(req, res);
+  if (!account) return;
+  const store = friendsStore();
+  const { incoming, outgoing } = store.listRequests(account.id);
+  return res.json({
+    friends: store.listFriends(account.id),
+    incoming,
+    outgoing,
+  });
+});
+
+app.get("/api/self-hosted/friends/lookup", (req, res) => {
+  const account = selfHostedPlayer(req, res);
+  if (!account) return;
+  const username = friendUsernameSchema.safeParse({ username: req.query.username });
+  if (!username.success) return res.status(400).json({ error: "invalid_input" });
+  const found = friendsStore().lookup(account.id, username.data.username);
+  if (found === null) return res.status(404).json({ error: "account_not_found" });
+  return res.json(found);
+});
+
+app.post("/api/self-hosted/friends/requests", (req, res) => {
+  const account = selfHostedPlayer(req, res);
+  if (!account) return;
+  const parsed = friendUsernameSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_input" });
+  const result = friendsStore().requestFriend(account.id, parsed.data.username);
+  switch (result.outcome) {
+    case "created":
+      return res.status(201).json({ id: result.id, status: "pending" });
+    case "already_sent":
+      return res.json({ id: result.id, status: "pending" });
+    case "accepted":
+      return res.json({ id: result.id, status: "accepted" });
+    case "account_not_found":
+      return res.status(404).json({ error: "account_not_found" });
+    case "self":
+      return res.status(400).json({ error: "self" });
+    case "already_friends":
+      return res.status(409).json({ error: "already_friends" });
+    case "friend_limit":
+      return res.status(409).json({ error: "friend_limit" });
+    case "rate_limited":
+      return res.status(429).json({ error: "rate_limited" });
+  }
+});
+
+app.post("/api/self-hosted/friends/requests/:id/accept", (req, res) => {
+  const account = selfHostedPlayer(req, res);
+  if (!account) return;
+  const id = z.uuid().safeParse(req.params.id);
+  if (!id.success) return res.status(400).json({ error: "invalid_input" });
+  if (!friendsStore().acceptRequest(id.data, account.id)) {
+    return res.status(404).json({ error: "request_not_found" });
+  }
+  return res.status(204).end();
+});
+
+app.post("/api/self-hosted/friends/requests/:id/decline", (req, res) => {
+  const account = selfHostedPlayer(req, res);
+  if (!account) return;
+  const id = z.uuid().safeParse(req.params.id);
+  if (!id.success) return res.status(400).json({ error: "invalid_input" });
+  if (!friendsStore().declineRequest(id.data, account.id)) {
+    return res.status(404).json({ error: "request_not_found" });
+  }
+  return res.status(204).end();
+});
+
+app.delete("/api/self-hosted/friends/:username", (req, res) => {
+  const account = selfHostedPlayer(req, res);
+  if (!account) return;
+  const username = friendUsernameSchema.safeParse(req.params);
+  if (!username.success) return res.status(400).json({ error: "invalid_input" });
+  if (!friendsStore().removeFriend(account.id, username.data.username)) {
+    return res.status(404).json({ error: "friend_not_found" });
+  }
+  return res.status(204).end();
+});
+
+app.get("/api/self-hosted/inbox", (req, res) => {
+  const account = selfHostedPlayer(req, res);
+  if (!account) return;
+  return res.json(friendsStore().inbox(account.id));
+});
+
+app.get("/api/self-hosted/invites", (req, res) => {
+  const account = selfHostedPlayer(req, res);
+  if (!account) return;
+  const gameID = z.string().regex(GAME_ID_REGEX).safeParse(req.query.gameID);
+  if (!gameID.success) return res.status(400).json({ error: "invalid_input" });
+  return res.json({
+    invited: friendsStore().invitedForGame(account.id, gameID.data),
+  });
+});
+
+app.post("/api/self-hosted/invites", (req, res) => {
+  const account = selfHostedPlayer(req, res);
+  if (!account) return;
+  const parsed = friendInviteSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_input" });
+  const result = friendsStore().invite(
+    account.id,
+    parsed.data.gameID,
+    parsed.data.to,
+  );
+  return res.status(201).json(result);
+});
+
+app.post("/api/self-hosted/invites/:id/:action", (req, res) => {
+  const account = selfHostedPlayer(req, res);
+  if (!account) return;
+  const id = z.uuid().safeParse(req.params.id);
+  const action = z
+    .enum(["accept", "dismiss"])
+    .safeParse(req.params.action);
+  if (!id.success || !action.success) {
+    return res.status(400).json({ error: "invalid_input" });
+  }
+  const status = action.data === "accept" ? "accepted" : "dismissed";
+  if (!friendsStore().setInviteStatus(id.data, account.id, status)) {
+    return res.status(404).json({ error: "invite_not_found" });
+  }
+  return res.status(204).end();
 });
 
 // Start the master process

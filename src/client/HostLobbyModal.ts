@@ -41,6 +41,7 @@ import { ListLobbyOptions } from "./components/ListLobbyDialog";
 import "./components/LobbyPlayerView";
 import "./components/PlutoniumIcon";
 import "./components/ToggleInputCard";
+import "./components/FriendInviteButton";
 import { inviteFriendsButton } from "./components/ui/InviteFriendsButton";
 import { modalHeader } from "./components/ui/ModalHeader";
 import { fetchCosmetics, InsufficientCurrency } from "./Cosmetics";
@@ -301,9 +302,17 @@ export class HostLobbyModal extends BaseModal {
         // no shadow lobby behind it — the invite would silently no-op. The
         // join modal gets this free from its own !currentLobbyId early return.
         const invite = this.lobbyId ? inviteFriendsButton() : undefined;
-        return invite
-          ? html`<div class="flex items-center gap-2">${copy}${invite}</div>`
-          : copy;
+        // The friends list sits beside the code, never instead of it: a friend
+        // who is offline still gets the invitation, and anyone not on the list
+        // still needs the code.
+        const friends = this.lobbyId
+          ? html`<friend-invite-button
+              .gameID=${this.lobbyId}
+            ></friend-invite-button>`
+          : undefined;
+        return html`<div class="flex items-center gap-2">
+          ${copy}${friends}${invite ?? nothing}
+        </div>`;
       })(),
     });
   }

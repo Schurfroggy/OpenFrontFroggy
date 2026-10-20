@@ -55,7 +55,9 @@ const RESET_REQUEST_MAX_AGE_SECONDS = 60 * 60 * 24;
 const APPROVED_RESET_MAX_AGE_SECONDS = 60 * 60;
 const SCRYPT_OPTIONS = { N: 16_384, r: 8, p: 1 } as const;
 
-function normalizeUsername(username: string): string {
+// The one canonical spelling of a username, shared with the friends store so a
+// friend can be found by whatever case/spacing the player typed.
+export function normalizeUsername(username: string): string {
   return username.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
 }
 
@@ -84,6 +86,16 @@ function sessionHash(token: string): string {
 
 export class SelfHostedAccountStore {
   private readonly database: DatabaseSync;
+
+  /**
+   * The live connection, for sibling stores that share this schema (friends).
+   * One connection means one writer, one transaction scope, and no ordering
+   * puzzle about which store created `self_hosted_accounts` first — the
+   * friends tables carry foreign keys into it.
+   */
+  get db(): DatabaseSync {
+    return this.database;
+  }
 
   constructor(databasePath = selfHostedAchievementDatabasePath()) {
     if (databasePath !== ":memory:") {

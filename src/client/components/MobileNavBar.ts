@@ -2,11 +2,12 @@ import { html, LitElement, nothing, TemplateResult } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { assetUrl } from "../../core/AssetUrls";
 import { ClientEnv } from "../ClientEnv";
+import { currentInbox, FRIENDS_INBOX_EVENT } from "../FriendsPolling";
 import {
   loadSelfHostedAccount,
   loadSelfHostedAdminOverview,
 } from "../SelfHostedAccount";
-import { translateText } from "../Utils";
+import { showToast, translateText } from "../Utils";
 import { NavNotificationsController } from "./NavNotificationsController";
 
 const MOBILE_ITEM =
@@ -23,6 +24,9 @@ export class MobileNavBar extends LitElement {
   private _notifications = new NavNotificationsController(this);
   @state() private selfHostedAdmin = false;
   @state() private pendingResets = 0;
+  // null = not answered yet; see DesktopNavBar.
+  @state() private signedIn: boolean | null = null;
+  @state() private friendsUnread = 0;
   private adminTimer: number | null = null;
 
   createRenderRoot() {
@@ -38,6 +42,8 @@ export class MobileNavBar extends LitElement {
         () => void this.refreshAdminState(),
         15000,
       );
+      window.addEventListener(FRIENDS_INBOX_EVENT, this._onInbox);
+      this._applyInbox(currentInbox());
     }
 
     const current = window.currentPageId;
@@ -51,8 +57,32 @@ export class MobileNavBar extends LitElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     window.removeEventListener("showPage", this._onShowPage);
+    window.removeEventListener(FRIENDS_INBOX_EVENT, this._onInbox);
     if (this.adminTimer !== null) window.clearInterval(this.adminTimer);
   }
+
+  private _onInbox = (event: Event) => {
+    this._applyInbox(
+      (
+        event as CustomEvent<
+          { invites?: unknown[]; friendRequests?: unknown[] } | null
+        >
+      ).detail,
+    );
+  };
+
+  private _applyInbox(
+    inbox: { invites?: unknown[]; friendRequests?: unknown[] } | null,
+  ) {
+    this.friendsUnread =
+      (inbox?.invites?.length ?? 0) + (inbox?.friendRequests?.length ?? 0);
+  }
+
+  private _onFriendsClick = (event: Event) => {
+    if (this.signedIn !== false) return;
+    event.stopPropagation();
+    showToast(translateText("friends.login_required"), "red");
+  };
 
   private _onShowPage = (e: Event) => {
     const pageId = (e as CustomEvent).detail;
@@ -81,6 +111,7 @@ export class MobileNavBar extends LitElement {
 
   private async refreshAdminState() {
     const account = await loadSelfHostedAccount(true);
+    this.signedIn = account !== null;
     this.selfHostedAdmin = account?.role === "admin";
     if (!this.selfHostedAdmin) {
       this.pendingResets = 0;
@@ -132,6 +163,24 @@ export class MobileNavBar extends LitElement {
           data-page="page-play"
           data-i18n="main.play"
         ></button>
+        ${ClientEnv.selfHosted?.() === true
+          ? html`<button
+              class="${MOBILE_ITEM} flex items-center ${currentPage ===
+              "page-friends"
+                ? "active"
+                : ""}"
+              data-page="page-friends"
+              @click=${this._onFriendsClick}
+            >
+              <span>${translateText("main.friends")}</span>
+              ${this.friendsUnread > 0
+                ? html`<span
+                    class="ml-3 flex min-w-6 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs leading-6 text-white"
+                    >${this.friendsUnread}</span
+                  >`
+                : nothing}
+            </button>`
+          : nothing}
         ${ClientEnv.selfHosted?.() === true
           ? html`<button
               class="${MOBILE_ITEM} ${currentPage === "page-self-hosted-account"

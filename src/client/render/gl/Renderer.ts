@@ -919,9 +919,9 @@ export class GPURenderer {
     this.railroadPass.uploadRailroadState(data);
   }
 
-  updateFog(brightness: Uint8Array | null): void {
+  updateFog(brightness: Uint8Array | null, version?: number): void {
     this.fogEnabled = brightness !== null;
-    this.fogPass.update(brightness);
+    this.fogPass.update(brightness, version);
   }
 
   updateUnits(units: Map<number, UnitState>, gameTick: number): void {

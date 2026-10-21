@@ -20,6 +20,7 @@ import {
 import { TileRef } from "./GameMap";
 
 export interface GameUpdateViewData {
+  /** Omitted means unchanged; null explicitly disables the current mask. */
   fogBrightness?: Uint8Array | null;
   /**
    * Small IDs of the countries the observer can currently inspect.

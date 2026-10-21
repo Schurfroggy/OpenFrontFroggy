@@ -17,7 +17,9 @@ import type {
  * Arrays are long-lived and mutated in place each tick (zero-copy refs).
  */
 export interface FrameData {
+  /** Immutable mask until replaced; version also covers spawn-preview changes. */
   readonly fogBrightness?: Uint8Array | null;
+  readonly fogBrightnessVersion?: number;
   // ── Core accumulated state ────────────────────────────────────────────
 
   readonly tick: number;

@@ -3,6 +3,7 @@ import { Config } from "../src/core/configuration/Config";
 import { Executor } from "../src/core/execution/ExecutionManager";
 import { NoOpExecution } from "../src/core/execution/NoOpExecution";
 import { NukeExecution } from "../src/core/execution/NukeExecution";
+import { FogBrightnessUpdates } from "../src/core/game/FogBrightnessUpdates";
 import {
   addVisionField,
   computeFog,
@@ -17,6 +18,8 @@ import {
   UnitType,
 } from "../src/core/game/Game";
 import { GameImpl, GameSnapshot } from "../src/core/game/GameImpl";
+import { GameUpdateViewData } from "../src/core/game/GameUpdates";
+import { GameRunner } from "../src/core/GameRunner";
 import { GameConfigSchema, StampedIntent } from "../src/core/Schemas";
 import { applyGameConfigPatch } from "../src/server/ConfigPatch";
 import { setup } from "./util/Setup";
@@ -49,6 +52,85 @@ const intent = (a: Player, value: object) =>
 
 // These tests run real maps/simulation; no renderer or player mocks.
 describe("fog fields and contacts", () => {
+  it("resets reusable scratch across fields, dimensions and distance widths", () => {
+    for (const [width, height, radius] of [
+      [31, 7, 6],
+      [31, 7, 3],
+      [7, 31, 9],
+      [520, 3, 256], // squared radius exceeds Uint16; must fall back.
+      [520, 3, 48],
+      [31, 7, 6],
+    ]) {
+      const cx = Math.floor(width / 2),
+        cy = Math.floor(height / 2);
+      const field = new Uint8Array(width * height);
+      addVisionField(field, width, height, [cy * width + cx], 16, radius);
+      for (let y = 0; y < height; y++)
+        for (let x = 0; x < width; x++) {
+          const squared = (x - cx) ** 2 + (y - cy) ** 2;
+          expect(field[y * width + x] > 0).toBe(squared < radius * radius);
+        }
+      expect(field[cy * width + cx]).toBe(16);
+      const saved = field.slice();
+      addVisionField(new Uint8Array(width * height), width, height, [0], 10, 2);
+      expect(field).toEqual(saved); // scratch never aliases returned masks.
+    }
+  });
+
+  it("deduplicates immutable output without retaining a transferred buffer", async () => {
+    const { game, a } = await scenario();
+    const updates = new FogBrightnessUpdates();
+    const first = updates.update(computeFog(game, a).brightness, a.id())!;
+    const received = structuredClone(first, { transfer: [first.buffer] });
+    expect(first.byteLength).toBe(0);
+    expect(
+      updates.update(computeFog(game, a).brightness, a.id()),
+    ).toBeUndefined();
+    const ship = a.buildUnit(UnitType.Warship, game.ref(60, 100), {
+      patrolTile: game.ref(60, 100),
+    });
+    const moved = updates.update(computeFog(game, a).brightness, a.id())!;
+    expect(moved[ship.tile()]).toBe(16);
+    expect(received[ship.tile()]).toBe(0);
+    expect(updates.update(computeFog(game, a).brightness, "other")).toEqual(
+      moved,
+    );
+    expect(updates.update(null, "other")).toBeNull();
+    expect(updates.update(null, "other")).toBeUndefined();
+    expect(updates.update(computeFog(game, a).brightness, "other")).toEqual(
+      moved,
+    );
+    expect(updates.update(new Uint8Array(3), "other")).toEqual(
+      new Uint8Array(3),
+    );
+  });
+
+  it("sends country changes even when a runner omits unchanged brightness", async () => {
+    const { game, a, b } = await scenario();
+    const sent: GameUpdateViewData[] = [];
+    const runner = new GameRunner(
+      game,
+      new Executor(game, "fog-test", a.clientID()!),
+      (gu) => sent.push(gu as GameUpdateViewData),
+    );
+    const tick = () => {
+      runner.addTurn({ turnNumber: game.ticks(), intents: [] });
+      expect(runner.executeNextTick()).toBe(true);
+      return sent[sent.length - 1];
+    };
+    const first = tick();
+    expect(first.fogBrightness).toBeInstanceOf(Uint8Array);
+    expect(first.fogCountries).not.toContain(b.smallID());
+    b.conquer(game.ref(11, 100)); // Same lighting, new country in that light.
+    const second = tick();
+    expect(second).not.toHaveProperty("fogBrightness");
+    expect(second.fogCountries).toContain(b.smallID());
+    a.buildUnit(UnitType.Warship, game.ref(60, 100), {
+      patrolTile: game.ref(60, 100),
+    });
+    expect(tick().fogBrightness?.[game.ref(60, 100)]).toBe(16);
+  });
+
   it("uses integer levels, max overlap and a hard zero boundary", () => {
     const field = new Uint8Array(21 * 21);
     addVisionField(field, 21, 21, [10 * 21 + 10], 10, 5);

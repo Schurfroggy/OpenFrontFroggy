@@ -640,7 +640,10 @@ export class GameView implements GameMap {
       f.changedTiles = this.updatedTiles;
     }
 
-    f.fogBrightness = this.renderFogBrightness();
+    const renderedFog = this.renderFogBrightness();
+    if (renderedFog !== f.fogBrightness)
+      f.fogBrightnessVersion = (f.fogBrightnessVersion ?? 0) + 1;
+    f.fogBrightness = renderedFog;
     f.units = this.fogBrightness
       ? new Map(
           [...this._unitStates].filter(

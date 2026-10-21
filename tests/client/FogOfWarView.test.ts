@@ -10,6 +10,36 @@ import {
 } from "../util/viewStubs";
 
 describe("fog in the live GameView", () => {
+  it("retains mask/version on omitted updates while refreshing country access", () => {
+    const view = makeGameView({
+      myClientID: "client-a",
+      config: stubConfig({ fogOfWar: () => true, isReplay: () => false }),
+    });
+    const brightness = new Uint8Array(100);
+    brightness[5] = 10;
+    const gu = makeEmptyGu(1, { fogBrightness: brightness, fogCountries: [1] });
+    gu.updates[GameUpdateType.SpawnPhaseEnd] = [
+      { type: GameUpdateType.SpawnPhaseEnd, startTick: 1 },
+    ];
+    gu.updates[GameUpdateType.Player] = [
+      makePlayerUpdate(),
+      makePlayerUpdate({ id: "player-b", clientID: "client-b", smallID: 2 }),
+    ];
+    view.update(gu);
+    const version = view.frameData().fogBrightnessVersion;
+    const enemy = view.player("player-b");
+    expect(view.canViewPlayer(enemy)).toBe(false);
+    view.update(makeEmptyGu(2, { fogCountries: [1, 2] }));
+    expect(view.frameData().fogBrightness).toBe(brightness);
+    expect(view.frameData().fogBrightnessVersion).toBe(version);
+    expect(view.canViewPlayer(enemy)).toBe(true);
+    view.update(makeEmptyGu(3, { fogCountries: [1] }));
+    expect(view.canViewPlayer(enemy)).toBe(false);
+    view.update(makeEmptyGu(4, { fogBrightness: null }));
+    expect(view.frameData().fogBrightness).toBeNull();
+    expect(view.frameData().fogBrightnessVersion).toBe(version! + 1);
+  });
+
   it("dims spawn selection to level 5 without restricting tiles, then uses real vision", () => {
     const view = makeGameView({
       myClientID: "client-a",

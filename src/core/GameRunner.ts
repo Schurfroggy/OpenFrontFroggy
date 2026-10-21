@@ -5,6 +5,7 @@ import { Executor } from "./execution/ExecutionManager";
 import { RecomputeRailClusterExecution } from "./execution/RecomputeRailClusterExecution";
 import { SpawnTimerExecution } from "./execution/SpawnTimerExecution";
 import { WinCheckExecution } from "./execution/WinCheckExecution";
+import { FogBrightnessUpdates } from "./game/FogBrightnessUpdates";
 import { fogFor } from "./game/FogOfWar";
 import {
   AllPlayers,
@@ -143,6 +144,7 @@ export class GameRunner {
   private turns: Turn[] = [];
   private currTurn = 0;
   private isExecuting = false;
+  private readonly fogBrightnessUpdates = new FogBrightnessUpdates();
 
   private playerViewData: Record<PlayerID, NameViewData> = {};
   // Name placements are recomputed periodically; a runner that starts
@@ -277,8 +279,12 @@ export class GameRunner {
     const observerID = this.execManager.localClientID();
     const observer = observerID ? this.game.playerByClientID(observerID) : null;
     const fog = observer ? fogFor(this.game, observer, true) : null;
+    const fogBrightness = this.fogBrightnessUpdates.update(
+      fog?.brightness ?? null,
+      observer?.id(),
+    );
     this.callBack({
-      fogBrightness: fog?.brightness.slice() ?? null,
+      ...(fogBrightness !== undefined ? { fogBrightness } : {}),
       fogCountries: fog ? [...fog.countries] : null,
       tick: this.game.ticks(),
       packedTileUpdates,

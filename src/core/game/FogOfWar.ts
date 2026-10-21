@@ -16,6 +16,42 @@ export function territoryVisionRadius(area: number): number {
 
 const falloffs = new Map<string, Uint8Array>();
 
+// Fields and observers are computed synchronously. Retain one workspace, rather
+// than one map-sized allocation per field (or every previously loaded map).
+let distanceScratch: Uint16Array | Int32Array = new Uint16Array(0);
+let rowScratch = new Uint8Array(0);
+let columnScratch = new Uint8Array(0);
+let positionScratch = new Int32Array(0);
+let startScratch = new Int32Array(0);
+
+function visionScratch(width: number, height: number, limit: number) {
+  const wide = limit > 0xffff;
+  if (
+    distanceScratch.length !== width * height ||
+    wide !== distanceScratch instanceof Int32Array
+  ) {
+    distanceScratch = wide
+      ? new Int32Array(width * height)
+      : new Uint16Array(width * height);
+  }
+  if (rowScratch.length !== height) {
+    rowScratch = new Uint8Array(height);
+    positionScratch = new Int32Array(height);
+    startScratch = new Int32Array(height);
+  }
+  if (columnScratch.length !== width) columnScratch = new Uint8Array(width);
+  distanceScratch.fill(limit);
+  rowScratch.fill(0);
+  columnScratch.fill(0);
+  return {
+    distance: distanceScratch,
+    rows: rowScratch,
+    columns: columnScratch,
+    positions: positionScratch,
+    starts: startScratch,
+  };
+}
+
 /** Fractional distance is fixed-point; simulation never depends on floating sqrt. */
 function radialFalloff(level: number, radius: number): Uint8Array {
   const key = `${level}:${radius}`;
@@ -59,9 +95,11 @@ export function addVisionField(
     return;
   }
   const limit = radius * radius;
-  const distance = new Int32Array(out.length).fill(limit);
-  const rows = new Uint8Array(height),
-    columns = new Uint8Array(width);
+  const { distance, rows, columns, positions, starts } = visionScratch(
+    width,
+    height,
+    limit,
+  );
   for (const tile of seedList) {
     if (tile < 0 || tile >= out.length) continue;
     distance[tile] = 0;
@@ -86,8 +124,6 @@ export function addVisionField(
       if (distance[row + x] < limit) columns[x] = 1;
     }
   }
-  const positions = new Int32Array(height),
-    starts = new Int32Array(height);
   const falloff = radialFalloff(level, radius);
   for (let x = 0; x < width; x++) {
     if (!columns[x]) continue;

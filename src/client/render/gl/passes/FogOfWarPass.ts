@@ -15,6 +15,8 @@ export class FogOfWarPass {
   private previousTexture: WebGLTexture;
   private blend: WebGLUniformLocation;
   private initialized = false;
+  private brightness: Uint8Array | null = null;
+  private version: number | undefined;
   private updatedAt = 0;
   private camera: WebGLUniformLocation;
   private enabled = false;
@@ -93,12 +95,25 @@ export class FogOfWarPass {
     return texture;
   }
 
-  update(brightness: Uint8Array | null): void {
+  update(brightness: Uint8Array | null, version?: number): void {
     this.enabled = brightness !== null;
     if (!brightness) {
       this.initialized = false;
+      this.brightness = null;
+      this.version = undefined;
       return;
     }
+    // Unchanged worker updates retain the immutable mask and its version. Do
+    // not swap textures or restart interpolation; cloud time advances in draw().
+    // Compare identity too: a different GameView may restart its version count.
+    if (
+      this.initialized &&
+      brightness === this.brightness &&
+      version === this.version
+    )
+      return;
+    this.brightness = brightness;
+    this.version = version;
     const old = this.previousTexture;
     this.previousTexture = this.texture;
     this.texture = old;

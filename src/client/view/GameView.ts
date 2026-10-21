@@ -498,10 +498,15 @@ export class GameView implements GameMap {
     else if (!this._config.fogOfWar()) this.fogBrightness = null;
     this.fogCountries.clear();
     if (this.fogBrightness) {
-      for (let tile = 0; tile < this.fogBrightness.length; tile++) {
-        if (this.fogBrightness[tile] === 0) continue;
-        const owner = this.owner(tile);
-        if (owner.isPlayer()) this.fogCountries.add(owner.smallID());
+      if (gu.fogCountries) {
+        for (const id of gu.fogCountries) this.fogCountries.add(id);
+      } else {
+        // Older/partial update (or a replay path): rebuild from the mask.
+        for (let tile = 0; tile < this.fogBrightness.length; tile++) {
+          if (this.fogBrightness[tile] === 0) continue;
+          const owner = this.owner(tile);
+          if (owner.isPlayer()) this.fogCountries.add(owner.smallID());
+        }
       }
       const me = this.myPlayer();
       if (me) {

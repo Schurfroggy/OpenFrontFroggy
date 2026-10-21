@@ -279,6 +279,7 @@ export class GameRunner {
     const fog = observer ? fogFor(this.game, observer, true) : null;
     this.callBack({
       fogBrightness: fog?.brightness.slice() ?? null,
+      fogCountries: fog ? [...fog.countries] : null,
       tick: this.game.ticks(),
       packedTileUpdates,
       ...(packedMotionPlans ? { packedMotionPlans } : {}),

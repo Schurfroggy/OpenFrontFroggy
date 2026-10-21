@@ -21,6 +21,14 @@ import { TileRef } from "./GameMap";
 
 export interface GameUpdateViewData {
   fogBrightness?: Uint8Array | null;
+  /**
+   * Small IDs of the countries the observer can currently inspect.
+   *
+   * Computed by the same pass that builds `fogBrightness` (see FogOfWar
+   * `computeFog`); sent along so the main thread does not have to rescan the
+   * whole brightness mask every tick (2M tiles on the World map).
+   */
+  fogCountries?: number[] | null;
   tick: number;
   updates: GameUpdates;
   /**

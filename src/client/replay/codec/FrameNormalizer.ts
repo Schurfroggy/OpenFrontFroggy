@@ -106,6 +106,7 @@ export const VIEW_DATA_ROUTING: Record<
   playerNameViewData: "normalizer",
   packedNukeImpacts: "events",
   fogBrightness: "dropped",
+  fogCountries: "dropped",
   tickExecutionDuration: "dropped",
   pendingTurns: "dropped",
 };

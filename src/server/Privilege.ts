@@ -255,13 +255,21 @@ export class PrivilegeCheckerImpl implements PrivilegeChecker {
 
 export class FailOpenPrivilegeChecker implements PrivilegeChecker {
   isAllowed(flares: string[], refs: PlayerCosmeticRefs): CosmeticResult {
-    // Catalog cosmetics can't be resolved without the cosmetics data, but the
-    // verified intent isn't a catalog item — pass it through; the Worker's
-    // resolveVerifiedJoin decides it against the account at join.
-    return {
-      type: "allowed",
-      cosmetics: refs.verified === true ? { verified: true } : {},
-    };
+    // Bundled country flags do not depend on the remote cosmetics catalog.
+    // Validate against the same allowlist as the catalog-backed checker.
+    const cosmetics: PlayerCosmetics =
+      refs.verified === true ? { verified: true } : {};
+    if (refs.flag?.startsWith("country:")) {
+      const code = refs.flag.slice("country:".length);
+      if (!countryCodes.includes(code)) {
+        return {
+          type: "forbidden",
+          reason: "invalid flag: invalid country code",
+        };
+      }
+      cosmetics.flag = `/flags/${code}.svg`;
+    }
+    return { type: "allowed", cosmetics };
   }
 
   // No reserved-tag list while cosmetics infra is unavailable (e.g. during

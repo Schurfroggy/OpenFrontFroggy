@@ -54,6 +54,7 @@ describe("PlayerPanel - alliance countdown keeps updating after local player dea
       actions: () => Promise.resolve({ interaction: {} }),
     } as unknown as PlayerView;
     return {
+      isTileVisible: () => true,
       owner: () => null,
       myPlayer: () => myPlayer,
       ticks: () => 100,

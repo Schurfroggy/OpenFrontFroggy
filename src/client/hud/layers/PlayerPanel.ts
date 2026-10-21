@@ -141,15 +141,33 @@ export class PlayerPanel extends LitElement implements Controller {
   }
 
   async tick() {
-    if (this.isVisible && this.tile) {
+    if (this.isVisible && this.tile !== null) {
+      const target = this.g.owner(this.tile);
+      if (
+        !this.g.isTileVisible(this.tile) ||
+        (target?.isPlayer() && !this.g.canViewPlayer(target as PlayerView))
+      ) {
+        this.hide();
+        return;
+      }
       const owner = this.g.owner(this.tile);
       if (owner && owner.isPlayer()) {
         const pv = owner as PlayerView;
         const id = pv.id();
         // fetch only if we don't have it or the player changed
         if (this._profileForPlayerId !== Number(id)) {
-          this.otherProfile = await pv.profile();
-          this._profileForPlayerId = Number(id);
+          try {
+            const profile = await pv.profile();
+            if (!this.g.canViewPlayer(pv)) {
+              this.hide();
+              return;
+            }
+            this.otherProfile = profile;
+            this._profileForPlayerId = Number(id);
+          } catch {
+            this.hide();
+            return;
+          }
         }
       }
 
@@ -185,6 +203,7 @@ export class PlayerPanel extends LitElement implements Controller {
   }
 
   public show(actions: PlayerActions, tile: TileRef) {
+    if (!this.g.isTileVisible(tile)) return;
     this.actions = actions;
     this.tile = tile;
     this.moderationTarget = null;

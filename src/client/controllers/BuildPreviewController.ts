@@ -226,6 +226,22 @@ export class BuildPreviewController implements Controller {
       }
     }
 
+    if (
+      tileRef !== undefined &&
+      !this.game.isTileVisible(tileRef) &&
+      !(
+        this.ghostUnit.buildableUnit.type === UnitType.AtomBomb ||
+        this.ghostUnit.buildableUnit.type === UnitType.HydrogenBomb ||
+        this.ghostUnit.buildableUnit.type === UnitType.MIRV
+      )
+    ) {
+      this.pendingConfirm = null;
+      this.lastGhostData = null;
+      this.view.updateGhostPreview(null);
+      this.clearNukeTrajectory();
+      return;
+    }
+
     // Check if targeting an ally (for nuke warning visual)
     let targetingAlly = false;
     const myPlayer = this.game.myPlayer();
@@ -390,7 +406,7 @@ export class BuildPreviewController implements Controller {
         : new Set();
     const sams: SAMInfo[] = [];
     for (const s of this.game.units(UnitType.SAMLauncher)) {
-      if (!s.isActive()) continue;
+      if (!s.isActive() || !this.game.isUnitVisible(s)) continue;
       const owner = s.owner();
       if (owner === myPlayer) continue;
       if (

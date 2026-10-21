@@ -5,6 +5,7 @@ import { Executor } from "./execution/ExecutionManager";
 import { RecomputeRailClusterExecution } from "./execution/RecomputeRailClusterExecution";
 import { SpawnTimerExecution } from "./execution/SpawnTimerExecution";
 import { WinCheckExecution } from "./execution/WinCheckExecution";
+import { fogFor } from "./game/FogOfWar";
 import {
   AllPlayers,
   BuildableUnit,
@@ -12,6 +13,7 @@ import {
   GameType,
   GameUpdates,
   NameViewData,
+  Nukes,
   Player,
   PlayerActions,
   PlayerBorderTiles,
@@ -272,7 +274,11 @@ export class GameRunner {
     const packedNukeImpacts =
       nukeImpactTiles.length > 0 ? new Uint32Array(nukeImpactTiles) : undefined;
 
+    const observerID = this.execManager.localClientID();
+    const observer = observerID ? this.game.playerByClientID(observerID) : null;
+    const fog = observer ? fogFor(this.game, observer, true) : null;
     this.callBack({
+      fogBrightness: fog?.brightness.slice() ?? null,
       tick: this.game.ticks(),
       packedTileUpdates,
       ...(packedMotionPlans ? { packedMotionPlans } : {}),
@@ -301,7 +307,12 @@ export class GameRunner {
     const player = this.game.player(playerID);
     const tile =
       x !== undefined && y !== undefined ? this.game.ref(x, y) : null;
-    return player.buildableUnits(tile, units);
+    const fog = fogFor(this.game, player);
+    const permitted =
+      tile !== null && fog && !fog.brightness[tile]
+        ? (units ?? []).filter((unit) => Nukes.has(unit))
+        : units;
+    return player.buildableUnits(tile, permitted);
   }
 
   public playerActions(
@@ -313,6 +324,16 @@ export class GameRunner {
     const player = this.game.player(playerID);
     const tile =
       x !== undefined && y !== undefined ? this.game.ref(x, y) : null;
+    const id = this.execManager.localClientID();
+    const observer = id ? this.game.playerByClientID(id) : null;
+    const fog = observer ? fogFor(this.game, observer) : null;
+    if (tile !== null && fog && !fog.brightness[tile]) {
+      return {
+        canAttack: false,
+        buildableUnits: [],
+        canSendEmojiAllPlayers: false,
+      };
+    }
     const actions = {
       canAttack: tile !== null && player.canAttack(tile),
       buildableUnits: units === null ? [] : player.buildableUnits(tile, units),
@@ -338,11 +359,20 @@ export class GameRunner {
     return actions;
   }
 
+  private canObservePlayer(player: Player): boolean {
+    const id = this.execManager.localClientID();
+    const observer = id ? this.game.playerByClientID(id) : null;
+    const fog = observer ? fogFor(this.game, observer) : null;
+    return !fog || fog.countries.has(player.smallID());
+  }
+
   public playerProfile(playerID: number): PlayerProfile {
     const player = this.game.playerBySmallID(playerID);
     if (!player.isPlayer()) {
       throw new Error(`player with id ${playerID} not found`);
     }
+    if (!this.canObservePlayer(player))
+      throw new Error("Player is outside current vision");
     return player.playerProfile();
   }
   public playerBorderTiles(playerID: PlayerID): PlayerBorderTiles {

@@ -269,6 +269,17 @@ export class ReplayPlayerView {
 }
 
 export class ReplayGameView {
+  // Replays retain the documented omniscient observer perspective.
+  isTileVisible(): boolean {
+    return true;
+  }
+  canViewPlayer(): boolean {
+    return true;
+  }
+  isUnitVisible(): boolean {
+    return true;
+  }
+
   private readonly bySmallID = new Map<number, ReplayPlayerView>();
   private readonly order: ReplayPlayerView[] = [];
   private frame: ReplayFrame | null = null;

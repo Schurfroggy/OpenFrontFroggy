@@ -105,6 +105,7 @@ export const VIEW_DATA_ROUTING: Record<
   packedAttackUpdates: "normalizer",
   playerNameViewData: "normalizer",
   packedNukeImpacts: "events",
+  fogBrightness: "dropped",
   tickExecutionDuration: "dropped",
   pendingTurns: "dropped",
 };

@@ -116,6 +116,7 @@ function sendGameUpdateBatch(gameUpdates: GameUpdateViewData[]): void {
   const transfers: Transferable[] = [];
   for (const gu of gameUpdates) {
     transfers.push(gu.packedTileUpdates.buffer);
+    if (gu.fogBrightness) transfers.push(gu.fogBrightness.buffer);
     if (gu.packedMotionPlans) {
       transfers.push(gu.packedMotionPlans.buffer);
     }

@@ -16,6 +16,7 @@ import { DoomsdayClockExecutionSnapshot } from "../execution/DoomsdayClockExecut
 import { EmbargoAllExecutionSnapshot } from "../execution/EmbargoAllExecution";
 import { EmbargoExecutionSnapshot } from "../execution/EmbargoExecution";
 import { EmojiExecutionSnapshot } from "../execution/EmojiExecution";
+import { ExpeditionShipExecutionSnapshot } from "../execution/ExpeditionShipExecution";
 import { FactoryExecutionSnapshot } from "../execution/FactoryExecution";
 import { MarkDisconnectedExecutionSnapshot } from "../execution/MarkDisconnectedExecution";
 import { MirvExecutionSnapshot } from "../execution/MIRVExecution";
@@ -98,5 +99,6 @@ export const EXECUTION_SNAPSHOT_TYPES = [
   TribeExecutionSnapshot,
   UpgradeStructureExecutionSnapshot,
   WarshipExecutionSnapshot,
+  ExpeditionShipExecutionSnapshot,
   WinCheckExecutionSnapshot,
 ] as unknown as readonly ExecutionSnapshotType<unknown>[];

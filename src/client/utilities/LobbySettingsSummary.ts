@@ -92,6 +92,11 @@ export function notableLobbySettings(
       label: translateText("public_game_modifier.disable_alliances_label"),
       value: renderDuration(c.customAllianceDuration * 60),
     });
+  if (c.fogOfWar?.enabled)
+    items.push({
+      label: translateText("game_settings.fog_of_war"),
+      value: enabled,
+    });
   if (c.waterNukes)
     items.push({
       label: translateText("game_settings.water_nukes"),

@@ -29,6 +29,7 @@ import type {
   TerrainRect,
   UnitState,
 } from "../types";
+import { UT_ATOM_BOMB, UT_HYDROGEN_BOMB } from "../types/UnitType";
 import { Camera } from "./Camera";
 import { GLUnavailableError, initGL } from "./initGL";
 import { BarPass } from "./passes/BarPass";
@@ -39,12 +40,11 @@ import { CrosshairPass } from "./passes/CrosshairPass";
 import { DefenseCoveragePass } from "./passes/DefenseCoveragePass";
 import { FalloutBloomPass } from "./passes/FalloutBloomPass";
 import { FalloutLightPass } from "./passes/FalloutLightPass";
+import { FogOfWarPass } from "./passes/FogOfWarPass";
 import { FxPass } from "./passes/fx-pass";
 import { LightmapPass } from "./passes/LightmapPass";
 import { MapLayerPass } from "./passes/MapLayerPass";
 import { MoveIndicatorPass } from "./passes/MoveIndicatorPass";
-import { WarArrowPass } from "./passes/WarArrowPass";
-import type { WarArrow } from "./passes/WarArrowPass";
 import { NamePass } from "./passes/name-pass";
 import { NightCompositePass } from "./passes/NightCompositePass";
 import { NukeTelegraphPass } from "./passes/NukeTelegraphPass";
@@ -65,6 +65,8 @@ import { TerrainPass } from "./passes/TerrainPass";
 import { TerritoryPass } from "./passes/TerritoryPass";
 import { TrailPass } from "./passes/TrailPass";
 import { UnitPass } from "./passes/UnitPass";
+import type { WarArrow } from "./passes/WarArrowPass";
+import { WarArrowPass } from "./passes/WarArrowPass";
 import { WorldTextPass } from "./passes/WorldTextPass";
 import type { RenderSettings } from "./RenderSettings";
 import { AffiliationPalette } from "./utils/Affiliation";
@@ -137,6 +139,8 @@ export class GPURenderer {
   private namePass: NamePass;
   private fxPass: FxPass;
   private rangeCirclePass: RangeCirclePass;
+  private fogEnabled = false;
+  private nukeRangePreview = false;
   private samRadiusPass: SAMRadiusPass;
   private warArrowPass: WarArrowPass;
   private crosshairPass: CrosshairPass;
@@ -188,6 +192,7 @@ export class GPURenderer {
 
   private animId: number | null = null;
   private frameTick = 0;
+  private fogPass: FogOfWarPass;
   private mapW = 0;
   private mapH = 0;
 
@@ -267,6 +272,7 @@ export class GPURenderer {
     this.mapH = mapH;
 
     this.camera = new Camera(mapW, mapH);
+    this.fogPass = new FogOfWarPass(gl, mapW, mapH, this.settings.fogOfWar);
 
     // --- Terrain (static) ---
     // Bake once and let the array go — nothing below retains map-sized
@@ -913,6 +919,11 @@ export class GPURenderer {
     this.railroadPass.uploadRailroadState(data);
   }
 
+  updateFog(brightness: Uint8Array | null): void {
+    this.fogEnabled = brightness !== null;
+    this.fogPass.update(brightness);
+  }
+
   updateUnits(units: Map<number, UnitState>, gameTick: number): void {
     this.lastUnits = units;
     this.frameTick++;
@@ -1069,6 +1080,8 @@ export class GPURenderer {
   }
 
   updateGhostPreview(data: GhostPreviewData | null): void {
+    this.nukeRangePreview =
+      data?.ghostType === UT_ATOM_BOMB || data?.ghostType === UT_HYDROGEN_BOMB;
     this.structurePass.updateGhostPreview(data);
     this.railroadPass.updateGhostPreview(data);
     this.rangeCirclePass.updateGhostPreview(data);
@@ -1342,6 +1355,16 @@ export class GPURenderer {
     }
 
     this.renderOverlays(cam, zoom);
+    this.fogPass.draw(cam);
+    if (this.fogEnabled) {
+      // Player-authored aiming guides remain readable over unexplored terrain.
+      // World units, SAM coverage and in-flight telegraphs stay under the fog.
+      this.gl.enable(this.gl.BLEND);
+      this.gl.blendFunc(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA);
+      if (this.nukeRangePreview) this.rangeCirclePass.draw(cam);
+      this.nukeTrajectoryPass.draw(cam);
+      this.gl.disable(this.gl.BLEND);
+    }
   }
 
   private isLightCompositingActive(): boolean {
@@ -1400,8 +1423,9 @@ export class GPURenderer {
     if (pe.falloutBloom) this.bloomPass.draw(cam, this.frameTick);
     this.samRadiusPass.draw(cam);
     this.warArrowPass.draw(cam, zoom);
-    this.rangeCirclePass.draw(cam);
-    this.nukeTrajectoryPass.draw(cam);
+    if (!this.fogEnabled || !this.nukeRangePreview)
+      this.rangeCirclePass.draw(cam);
+    if (!this.fogEnabled) this.nukeTrajectoryPass.draw(cam);
     this.crosshairPass.draw(cam);
     if (pe.structure) this.structurePass.draw(cam, zoom);
     if (pe.structure) this.structureLevelPass.draw(cam, zoom);
@@ -1514,6 +1538,7 @@ export class GPURenderer {
       this.gl.deleteTexture(this.terrainBytesTex);
       this.terrainBytesTex = null;
     }
+    this.fogPass.dispose();
     this.terrainPass.dispose();
     this.territoryPass.dispose();
     this.trailPass.dispose();

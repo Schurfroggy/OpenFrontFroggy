@@ -17,6 +17,8 @@ describe("HoverHighlightController", () => {
       [new PlayerInfo("player1", PlayerType.Human, null, "player1_id")],
     );
 
+    game.isTileVisible = () => true;
+    game.isUnitVisible = () => true;
     eventBus = { on: vi.fn() };
     transformHandler = {
       screenToWorldCoordinatesFloat: vi
@@ -84,6 +86,42 @@ describe("HoverHighlightController", () => {
 
     expect(view.setHighlightOwner).toHaveBeenCalledWith(unit.owner().smallID());
   });
+
+  it.each([true, false])(
+    "highlights an expedition ship only when visible (visible=%s)",
+    (visible) => {
+      vi.spyOn(game.config(), "fogOfWar").mockReturnValue(true);
+      const tile = game.ref(50, 100);
+      const unit = game
+        .player("player1_id")
+        .buildUnit(UnitType.ExpeditionShip, tile, {
+          expeditionState: {
+            phase: "sailing",
+            originPort: 1,
+            destination: tile,
+            waitUntil: 0,
+          },
+        });
+      game.isUnitVisible = () => visible;
+      // The controller consumes GameView's variadic API; core Game accepts an array.
+      const coreUnits = game.units.bind(game);
+      game.units = (...types: UnitType[]) => coreUnits(types);
+      const ui = new HoverHighlightController(
+        game,
+        eventBus,
+        transformHandler,
+        view,
+      );
+      ui["navalHighlightEnabled"] = () => true;
+      ui["lastOwnerID"] = unit.owner().smallID() + 1;
+      ui.init();
+      const handler = eventBus.on.mock.calls[0][1];
+      handler(new MouseMoveEvent(50, 101));
+      expect(view.setHighlightOwner).toHaveBeenLastCalledWith(
+        visible ? unit.owner().smallID() : 0,
+      );
+    },
+  );
 
   it("clears hover highlight when naval hover finds no nearby units", () => {
     const waterTile = game.ref(50, 100);

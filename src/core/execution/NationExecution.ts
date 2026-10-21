@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { knownPlayers } from "../game/FogOfWarIntel";
 import {
   Difficulty,
   Execution,
@@ -36,6 +37,11 @@ import {
 import { assertNever, simpleHash } from "../Util";
 import { NationAllianceBehavior } from "./nation/NationAllianceBehavior";
 import { NationEmojiBehavior } from "./nation/NationEmojiBehavior";
+import {
+  FogAIState,
+  initialFogAIState,
+  maybeDispatchExpedition,
+} from "./nation/NationExpeditionBehavior";
 import { NationMIRVBehavior } from "./nation/NationMIRVBehavior";
 import { NationNukeBehavior } from "./nation/NationNukeBehavior";
 import { NationStructureBehavior } from "./nation/NationStructureBehavior";
@@ -63,6 +69,8 @@ export class NationExecution implements Execution {
   private triggerRatio: number;
   private reserveRatio: number;
   private expandRatio: number;
+
+  private fogAI: FogAIState = initialFogAIState();
 
   private embargoMalusApplied = new Set<PlayerID>();
 
@@ -221,13 +229,19 @@ export class NationExecution implements Execution {
     this.updateRelationsFromEmbargos();
     this.allianceBehavior.handleAllianceRequests();
     this.allianceBehavior.handleAllianceExtensionRequests();
-    this.mirvBehavior.considerMIRV();
+    const nuclearDecision =
+      !this.mg.config().fogOfWar() || ticks >= this.fogAI.nextNuclearTick;
+    if (nuclearDecision) this.mirvBehavior.considerMIRV();
+    maybeDispatchExpedition(this.mg, this.player, this.random, this.fogAI);
     this.structureBehavior.handleStructures();
     this.warshipBehavior.maybeSpawnWarship();
     this.handleEmbargoesToHostileNations();
     this.attackBehavior.maybeAttack();
     this.warshipBehavior.counterWarshipInfestation();
-    this.nukeBehavior.maybeSendNuke();
+    if (nuclearDecision) {
+      this.nukeBehavior.maybeSendNuke();
+      if (this.mg.config().fogOfWar()) this.fogAI.nextNuclearTick = ticks + 150;
+    }
   }
 
   private initializeBehaviors(): void {
@@ -316,7 +330,9 @@ export class NationExecution implements Execution {
   private updateRelationsFromEmbargos() {
     const player = this.player;
     if (player === null) return;
-    const others = this.mg.players().filter((p) => p.id() !== player.id());
+    const others = knownPlayers(this.mg, player).filter(
+      (p) => p.id() !== player.id(),
+    );
 
     others.forEach((other: Player) => {
       const embargoMalus = -20;
@@ -339,7 +355,9 @@ export class NationExecution implements Execution {
   private handleEmbargoesToHostileNations() {
     const player = this.player;
     if (player === null) return;
-    const others = this.mg.players().filter((p) => p.id() !== player.id());
+    const others = knownPlayers(this.mg, player).filter(
+      (p) => p.id() !== player.id(),
+    );
     const difficulty = this.mg.config().gameConfig().difficulty;
     const isHigherDifficulty =
       difficulty === Difficulty.Hard || difficulty === Difficulty.Impossible;
@@ -411,6 +429,7 @@ export class NationExecution implements Execution {
       expandRatio: this.expandRatio,
       embargoMalusApplied: [...this.embargoMalusApplied],
       spawnExecAdded: this.spawnExecAdded,
+      fogAI: { ...this.fogAI, directions: [...this.fogAI.directions] },
       behaviors: this.behaviorsInitialized
         ? {
             emoji: this.emojiBehavior.snapshot(w),
@@ -449,6 +468,7 @@ export class NationExecution implements Execution {
     this.expandRatio = s.expandRatio;
     this.embargoMalusApplied = new Set(s.embargoMalusApplied);
     this.spawnExecAdded = s.spawnExecAdded;
+    this.fogAI = { ...s.fogAI, directions: [...s.fogAI.directions] };
     this.behaviorsInitialized = s.behaviors !== null;
     const b = s.behaviors;
     const player = this.player;
@@ -504,6 +524,11 @@ const NationStateSchema = z.object({
   expandRatio: zNum(),
   embargoMalusApplied: z.array(z.string()),
   spawnExecAdded: z.boolean(),
+  fogAI: z.object({
+    nextNuclearTick: zNum(),
+    nextExpeditionTick: zNum(),
+    directions: z.array(z.number().int()),
+  }),
   behaviors: z
     .object({
       emoji: VersionedSchema,
@@ -520,7 +545,8 @@ type NationState = z.infer<typeof NationStateSchema>;
 
 export const NationExecutionSnapshot = execSnapshotType({
   name: "Nation",
-  version: 1,
+  version: 2,
+  migrations: { 1: (s) => ({ ...s, fogAI: initialFogAIState() }) },
   schema: NationStateSchema,
   cls: () => NationExecution,
 });

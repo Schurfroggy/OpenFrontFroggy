@@ -310,3 +310,25 @@ describe("HostLobbyModal start button", () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe("host fog mode exclusivity", () => {
+  it("clears conflicting modes before publishing the new config", () => {
+    const modal = new HostLobbyModal() as any;
+    modal.putGameConfig = vi.fn();
+    modal.waterNukes = true;
+    modal.doomsdayClock = true;
+    modal.overtime = true;
+    modal.handleConfigOptionToggleChanged(
+      new CustomEvent("option-toggle-changed", {
+        detail: { labelKey: "game_settings.fog_of_war", checked: true },
+      }),
+    );
+    expect(modal.fogOfWar).toBe(true);
+    expect([modal.waterNukes, modal.doomsdayClock, modal.overtime]).toEqual([
+      false,
+      false,
+      false,
+    ]);
+    expect(modal.putGameConfig).toHaveBeenCalledOnce();
+  });
+});

@@ -1,4 +1,34 @@
 {
+  "expedition": {
+    "coast_discovered": "远航船发现了新的海岸。",
+    "name": "远航船",
+    "description": "点击目标，从最近可用港口出发；虚线仅示意方向。视野亮度10，抵达后侦察1分钟，再自主探索。停留期间与周边国家共享视野。不可改令或召回。",
+    "port": "出发港",
+    "target": "原定目标",
+    "cost": "黄金费用",
+    "dispatch": "派遣",
+    "cancel": "取消",
+    "choose_port": "点击地图上的港口，或从下方选择出发港。",
+    "choose_target": "点击任意地图坐标作为探索目标，右键或Esc取消。",
+    "choose_confirm": "确认这次不可撤回的远航？",
+    "no_port": "请先建造港口。",
+    "unavailable": "无法派遣，请检查黄金和可用港口。",
+    "sailing": "远航中",
+    "surveying": "停留侦察",
+    "exploring": "自主探索",
+    "stranded": "原地等待",
+    "remaining": "侦察剩余：{seconds}秒",
+    "irrevocable": "出航后不可改令或召回。",
+    "arrived": "远航船已抵达，停留侦察1分钟。",
+    "approached": "远航船已到达本海域可接近的位置，停留侦察1分钟。",
+    "discovered": "远航船发现了新的国家。",
+    "stranded_notice": "远航船暂时无法继续航行，正在原地等待。"
+  },
+  "player_flag": {
+    "choose": "选择国旗",
+    "none": "无国旗",
+    "no_results": "没有找到匹配的国旗。"
+  },
   "lang": {
     "en": "Chinese Simplified",
     "native": "简体中文",
@@ -995,6 +1025,7 @@
     "flag_alt": "{language}旗帜"
   },
   "unit_type": {
+    "expedition_ship": "远航船",
     "boat": "船",
     "city": "城市",
     "defense_post": "要塞",
@@ -1290,6 +1321,7 @@
   },
   "build_menu": {
     "desc": {
+      "expedition_ship": "点击目标，从最近可用港口出发；虚线仅示意方向。视野亮度10，抵达后侦察1分钟，再自主探索。停留期间与周边国家共享视野。不可改令或召回。",
       "atom_bomb": "小型爆炸",
       "hydrogen_bomb": "大型爆炸",
       "mirv": "巨型爆炸，仅针对选中的玩家",
@@ -2353,6 +2385,7 @@
     "custom_alliances": "结盟时效",
     "disable_units": "禁用单位",
     "doomsday_clock": "末日时钟",
+    "fog_of_war": "迷雾模式",
     "gold_multiplier": "黄金倍率",
     "infinite_gold": "无限黄金",
     "infinite_troops": "无限兵力",

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { canSeeUnit } from "../../game/FogOfWarIntel";
 import {
   AllPlayers,
   Difficulty,
@@ -174,6 +175,10 @@ export class NationWarshipBehavior {
     // Iterate tracked trade ships; if we no longer own it, it was captured:
     // retaliate. Deleting the current entry while iterating a Set is safe.
     for (const ship of this.trackedTradeShips) {
+      if (!canSeeUnit(this.game, this.player, ship)) {
+        this.trackedTradeShips.delete(ship);
+        continue;
+      }
       if (!ship.isActive()) {
         this.trackedTradeShips.delete(ship);
         continue;
@@ -187,6 +192,28 @@ export class NationWarshipBehavior {
   }
 
   private trackIncomingTransportsAndRetaliate(): void {
+    if (this.game.config().fogOfWar()) {
+      for (const ship of this.game.units(UnitType.TransportShip)) {
+        if (
+          !ship.isActive() ||
+          this.player.isFriendly(ship.owner()) ||
+          !canSeeUnit(this.game, this.player, ship) ||
+          this.dealtWithTransportShip.has(ship)
+        )
+          continue;
+        // A visible approach is actionable; its hidden destination is not read.
+        if (
+          ![...this.player.borderTiles()].some(
+            (t) => this.game.euclideanDistSquared(t, ship.tile()) < 90 * 90,
+          )
+        )
+          continue;
+        this.maybeRetaliateWithWarship(ship.tile(), ship.owner(), "transport");
+        this.dealtWithTransportShip.add(ship);
+        break;
+      }
+      return;
+    }
     // Add any transports which are targeting us to our tracking map
     for (const p of this.game.units(UnitType.TransportShip)) {
       const target = p.targetTile();
@@ -306,6 +333,7 @@ export class NationWarshipBehavior {
   // Send a squad at the fleet blocking our boats, all at once or not at all:
   // Hard as many ships as they have, Impossible one more
   clearSeaLane(blocker: Unit): void {
+    if (!canSeeUnit(this.game, this.player, blocker)) return;
     if (this.game.config().isUnitDisabled(UnitType.Warship)) return;
     const { difficulty } = this.game.config().gameConfig();
     const target = blocker.tile();
@@ -375,8 +403,11 @@ export class NationWarshipBehavior {
         this.game.config().warshipTargettingRange(),
         UnitType.Warship,
       )
-      .filter(({ unit }) => unit.owner().canAttackPlayer(this.player, true))
-      .length;
+      .filter(
+        ({ unit }) =>
+          canSeeUnit(this.game, this.player, unit) &&
+          unit.owner().canAttackPlayer(this.player, true),
+      ).length;
   }
 
   // Our warships on the same water whose patrol area includes `tile`
@@ -422,6 +453,31 @@ export class NationWarshipBehavior {
   // Prevent warship infestations: if current player is one of the 3 richest and an enemy has too many warships, send a counter-warship.
   // What is a warship infestation? A player tries to dominate the entire ocean to block all trade and transport boats.
   counterWarshipInfestation(): void {
+    if (this.game.config().fogOfWar()) {
+      if (
+        this.game.config().isUnitDisabled(UnitType.Warship) ||
+        this.player.units(UnitType.Warship).length >= 3 ||
+        this.cost(UnitType.Warship) * 2n > this.player.gold()
+      )
+        return;
+      const visible = this.game
+        .units([UnitType.Warship, UnitType.ExpeditionShip])
+        .filter(
+          (u) =>
+            u.isActive() &&
+            !this.player.isFriendly(u.owner()) &&
+            canSeeUnit(this.game, this.player, u),
+        );
+      const target =
+        visible.find(
+          (u) =>
+            u.type() === UnitType.ExpeditionShip &&
+            u.expeditionState()?.phase === "surveying",
+        ) ?? (visible.length >= 3 ? visible[0] : undefined);
+      if (target && this.warshipsCovering(target.tile()).length === 0)
+        this.buildCounterWarship({ player: target.owner(), warship: target });
+      return;
+    }
     if (!this.shouldCounterWarshipInfestation()) {
       return;
     }

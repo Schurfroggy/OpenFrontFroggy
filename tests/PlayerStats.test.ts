@@ -45,6 +45,7 @@ describe("PlayerStats", () => {
   it("locks rank, name, and picker while stat columns share spare width", async () => {
     const me = player("me", 3);
     const game = {
+      canViewPlayer: () => true,
       myPlayer: () => me,
       playerViews: () => [me],
       config: () => ({ maxTroops: () => 100 }),
@@ -82,6 +83,7 @@ describe("PlayerStats", () => {
       player("me", 10),
     ];
     const game = {
+      canViewPlayer: () => true,
       myPlayer: () => players[6],
       playerViews: () => players,
       config: () => ({ maxTroops: () => 100 }),
@@ -139,6 +141,7 @@ describe("PlayerStats", () => {
     ]);
     const me = player("me", 3);
     const game = {
+      canViewPlayer: () => true,
       myPlayer: () => me,
       playerViews: () => [me],
       config: () => ({ maxTroops: () => 100 }),
@@ -198,6 +201,7 @@ describe("PlayerStats clan column", () => {
 
   async function mount(players: PlayerView[]): Promise<PlayerStats> {
     const game = {
+      canViewPlayer: () => true,
       myPlayer: () => players[0],
       playerViews: () => players,
       config: () => ({ maxTroops: () => 100 }),
@@ -358,4 +362,39 @@ describe("TeamStats clan column", () => {
     settings.setStatsColumns("team", ["clan", "gold"]);
     expect(columnsFor("team").map((column) => column.id)).not.toContain("clan");
   });
+});
+
+it("ranks only current contacts and removes a country when contact is lost", async () => {
+  const me = player("me", 10),
+    contact = player("contact", 30),
+    hidden = player("hidden", 9999);
+  const known = new Set([me, contact]);
+  const game = {
+    canViewPlayer: (p: PlayerView) => known.has(p),
+    myPlayer: () => me,
+    playerViews: () => [hidden, me, contact],
+    config: () => ({ maxTroops: () => 100 }),
+    ticks: () => 600,
+    numLandTiles: () => 10000,
+    numTilesWithFallout: () => 0,
+  } as unknown as GameView;
+  const table = new PlayerStats();
+  table.game = game;
+  table.visible = true;
+  document.body.append(table);
+  table.refresh();
+  await table.updateComplete;
+  let rows = [...table.querySelectorAll(".stats-table-row")];
+  expect(rows).toHaveLength(2);
+  expect(rows[0].textContent).toContain("contact");
+  expect(rows[0].textContent?.trim().split(/\s+/)[0]).toBe("1");
+  expect(table.textContent).not.toContain("hidden");
+  known.delete(contact);
+  table.refresh();
+  await table.updateComplete;
+  rows = [...table.querySelectorAll(".stats-table-row")];
+  expect(rows).toHaveLength(1);
+  expect(table.textContent).not.toContain("contact");
+  expect(rows[0].textContent?.trim().split(/\s+/)[0]).toBe("1");
+  table.remove();
 });

@@ -1,6 +1,7 @@
 import { AllPlayersStats, ClientID, Winner } from "../Schemas";
 import {
   EmojiMessage,
+  ExpeditionState,
   GameUpdates,
   Gold,
   MessageType,
@@ -19,6 +20,7 @@ import {
 import { TileRef } from "./GameMap";
 
 export interface GameUpdateViewData {
+  fogBrightness?: Uint8Array | null;
   tick: number;
   updates: GameUpdates;
   /**
@@ -188,6 +190,7 @@ export interface UnitUpdate {
   lastPos: TileRef;
   isActive: boolean;
   reachedTarget: boolean;
+  expeditionState?: ExpeditionState;
   warshipState?: WarshipState;
   transportShipState?: TransportShipState;
   nukeState?: NukeState;

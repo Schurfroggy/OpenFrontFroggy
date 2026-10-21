@@ -1591,6 +1591,8 @@ export class PlayerImpl implements Player {
     validTiles: TileRef[] | null,
   ): TileRef | false {
     switch (unitType) {
+      case UnitType.ExpeditionShip:
+        return false; // Dispatched only through the one-shot expedition intent.
       case UnitType.MIRV:
         if (!this.mg.hasOwner(targetTile)) {
           return false;

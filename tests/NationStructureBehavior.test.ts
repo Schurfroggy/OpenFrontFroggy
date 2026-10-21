@@ -29,6 +29,7 @@ function makeStation(unit: any, cluster: Cluster | null = null): any {
 function makeGame(stations: any[] = []): any {
   return {
     config: () => ({
+      fogOfWar: () => false,
       trainGold: (rel: string, _citiesVisited: number) => TRAIN_GOLD[rel] ?? 0n,
     }),
     railNetwork: () => ({

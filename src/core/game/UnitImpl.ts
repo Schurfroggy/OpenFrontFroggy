@@ -17,6 +17,7 @@ import {
 import { simpleHash, toInt, withinInt } from "../Util";
 import {
   AllUnitParams,
+  ExpeditionState,
   MessageType,
   NukeState,
   Player,
@@ -45,6 +46,7 @@ export class UnitImpl implements Unit {
   private _health: bigint;
   private _lastTile: TileRef;
   private _transportShipState: TransportShipState | undefined = undefined;
+  private _expeditionState?: ExpeditionState;
   private _warshipState: WarshipState | undefined = undefined;
   private _nukeState: NukeState | undefined = undefined;
   private _reachedTarget = false;
@@ -102,6 +104,8 @@ export class UnitImpl implements Unit {
         duration: this.mg.config().samUpgradeDuration(),
       };
     }
+    if ("expeditionState" in params)
+      this._expeditionState = { ...params.expeditionState };
     if ("patrolTile" in params) {
       this._warshipState = {
         state: "patrolling",
@@ -168,6 +172,9 @@ export class UnitImpl implements Unit {
       lastOwnerID: this._lastOwner?.smallID(),
       isActive: this._active,
       reachedTarget: this._reachedTarget,
+      expeditionState: this._expeditionState
+        ? { ...this._expeditionState }
+        : undefined,
       warshipState:
         this._warshipState !== undefined
           ? { ...this.warshipState() }
@@ -399,6 +406,7 @@ export class UnitImpl implements Unit {
     // else is either visible on the map or too low-stakes to surface.
     if (
       this._type !== UnitType.Warship &&
+      this._type !== UnitType.ExpeditionShip &&
       this._type !== UnitType.TransportShip
     ) {
       return;
@@ -413,7 +421,9 @@ export class UnitImpl implements Unit {
         unit:
           this._type === UnitType.TransportShip
             ? "unit_type.boat"
-            : "unit_type.warship",
+            : this._type === UnitType.ExpeditionShip
+              ? "unit_type.expedition_ship"
+              : "unit_type.warship",
       },
       this.id(),
     );
@@ -429,6 +439,14 @@ export class UnitImpl implements Unit {
 
   destroyer(): Player | undefined {
     return this._destroyer;
+  }
+
+  expeditionState(): ExpeditionState | undefined {
+    return this._expeditionState;
+  }
+  updateExpeditionState(state: ExpeditionState): void {
+    this._expeditionState = { ...state };
+    this.touch();
   }
 
   warshipState(): WarshipState {
@@ -797,6 +815,9 @@ export class UnitImpl implements Unit {
       owner: w.player(this._owner),
       tile: this._tile,
       lastTile: this._lastTile,
+      expeditionState: this._expeditionState
+        ? { ...this._expeditionState }
+        : null,
       active: this._active,
       targetTile: this._targetTile ?? null,
       targetPlayer:
@@ -876,6 +897,9 @@ export class UnitImpl implements Unit {
     this._transportShipState = s.transportShipState
       ? { ...s.transportShipState }
       : undefined;
+    this._expeditionState = s.expeditionState
+      ? { ...s.expeditionState }
+      : undefined;
     this._warshipState = s.warshipState ? { ...s.warshipState } : undefined;
     const nuke = s.nukeState;
     this._nukeState = nuke
@@ -911,9 +935,18 @@ export class UnitImpl implements Unit {
 
 export const UnitSnapshot = snapshotType({
   name: "Unit",
-  version: 1,
+  version: 2,
+  migrations: { 1: (s) => ({ ...s, expeditionState: null }) },
   schema: z.object({
     id: zInt(),
+    expeditionState: z
+      .object({
+        phase: z.enum(["sailing", "surveying", "exploring", "stranded"]),
+        originPort: zInt(),
+        destination: zTile(),
+        waitUntil: zInt(),
+      })
+      .nullable(),
     type: UnitTypeSchema,
     owner: zPlayerRef(),
     tile: zTile(),

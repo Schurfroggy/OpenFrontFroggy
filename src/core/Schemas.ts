@@ -44,6 +44,7 @@ export type Intent =
   | DonateGoldIntent
   | DonateTroopsIntent
   | BuildUnitIntent
+  | z.infer<typeof ExpeditionIntentSchema>
   | EmbargoIntent
   | QuickChatIntent
   | MoveWarshipIntent
@@ -545,6 +546,11 @@ export const GameConfigSchema = z.object({
   selfHostedAchievementsEnabled: z.boolean().optional(),
   rankedType: z.enum(RankedType).optional(), // Only set for ranked games.
   gameMapSize: z.enum(GameMapSize),
+  fogOfWar: z
+    .object({
+      enabled: z.boolean(),
+    })
+    .optional(),
   doomsdayClock: DoomsdayClockConfigSchema.optional(),
   overtime: OvertimeConfigSchema.optional(),
   publicGameModifiers: z
@@ -753,6 +759,11 @@ export const DonateTroopIntentSchema = z.object({
   troops: zb.float({ min: 0 }).nullable(),
 });
 
+export const ExpeditionIntentSchema = z.object({
+  type: z.literal("expedition"),
+  target: zb.uint(),
+});
+
 export const BuildUnitIntentSchema = z.object({
   type: z.literal("build_unit"),
   unit: z.enum(UnitType),
@@ -884,6 +895,7 @@ export const IntentSchema = z.discriminatedUnion("type", [
   UpdateGameConfigIntentSchema,
   ToggleGameStartTimerIntentSchema,
   AdminSetOutcomeIntentSchema,
+  ExpeditionIntentSchema,
 ]);
 
 // StampedIntent = Intent with server-stamped clientID (used in turns and execution)

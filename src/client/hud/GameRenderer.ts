@@ -4,6 +4,7 @@ import { Controller } from "../Controller";
 import { AmbienceController } from "../controllers/AmbienceController";
 import { AttackingTroopsController } from "../controllers/AttackingTroopsController";
 import { BuildPreviewController } from "../controllers/BuildPreviewController";
+import { ExpeditionController } from "../controllers/ExpeditionController";
 import { HoverHighlightController } from "../controllers/HoverHighlightController";
 import { LiveStatsController } from "../controllers/LiveStatsController";
 import { MapLayerController } from "../controllers/MapLayerController";
@@ -23,7 +24,6 @@ import { FrameProfiler } from "./FrameProfiler";
 import { ActionableEvents } from "./layers/ActionableEvents";
 import { AlertFrame } from "./layers/AlertFrame";
 import { AttacksDisplay } from "./layers/AttacksDisplay";
-import { NationLabelOverlay } from "./layers/NationLabelOverlay";
 import { BuildMenu } from "./layers/BuildMenu";
 import { ChatDisplay } from "./layers/ChatDisplay";
 import { ChatModal } from "./layers/ChatModal";
@@ -32,12 +32,13 @@ import { EmojiTable } from "./layers/EmojiTable";
 import { EventsDisplay } from "./layers/EventsDisplay";
 import { GameLeftSidebar } from "./layers/GameLeftSidebar";
 import { GameRightSidebar } from "./layers/GameRightSidebar";
-import { MapViewSelector } from "./layers/MapViewSelector";
 import { HeadsUpMessage } from "./layers/HeadsUpMessage";
 import { ImmunityTimer } from "./layers/ImmunityTimer";
 import { InGamePromo } from "./layers/InGamePromo";
 import { MainRadialMenu } from "./layers/MainRadialMenu";
+import { MapViewSelector } from "./layers/MapViewSelector";
 import { MultiTabModal } from "./layers/MultiTabModal";
+import { NationLabelOverlay } from "./layers/NationLabelOverlay";
 import { NewLobbyPrompt } from "./layers/NewLobbyPrompt";
 import { PerformanceOverlay } from "./layers/PerformanceOverlay";
 import { PlayerInfoOverlay } from "./layers/PlayerInfoOverlay";
@@ -106,6 +107,7 @@ export function createRenderer(
   ) as MapViewSelector | null;
   if (mapViewSelector && mapViewSelector instanceof MapViewSelector) {
     mapViewSelector.eventBus = eventBus;
+    mapViewSelector.fogOfWar = game.config().fogOfWar();
   } else {
     console.error("MapViewSelector element not found in the DOM");
   }
@@ -338,7 +340,21 @@ export function createRenderer(
   tutorialPanel.uiState = uiState;
 
   const layers: Controller[] = [
-    new WarshipSelectionController(game, eventBus, transformHandler, view),
+    new ExpeditionController(
+      game,
+      eventBus,
+      uiState,
+      transformHandler,
+      view,
+      inputEl,
+    ),
+    new WarshipSelectionController(
+      game,
+      eventBus,
+      transformHandler,
+      view,
+      uiState,
+    ),
     new BuildPreviewController(
       game,
       eventBus,
@@ -351,7 +367,7 @@ export function createRenderer(
     new LiveStatsController(game, eventBus),
     new StructureHighlightController(eventBus, view),
     new ViewModeController(eventBus, view),
-    new WarFrontsController(game, eventBus, view),
+    new WarFrontsController(game, eventBus, view, game.config().fogOfWar()),
     new AttackingTroopsController(game, eventBus, userSettings, view),
     new SoundEffectController(game, eventBus),
     new AmbienceController(game, eventBus, transformHandler),
@@ -408,6 +424,11 @@ export class GameRenderer {
     private layers: Controller[],
     private performanceOverlay: PerformanceOverlay,
   ) {}
+
+  dispose(): void {
+    for (const layer of this.layers) layer.dispose?.();
+    this.layerTickState.clear();
+  }
 
   initialize() {
     loadAllSprites().catch((err) =>

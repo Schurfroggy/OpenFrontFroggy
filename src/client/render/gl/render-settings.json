@@ -1,4 +1,13 @@
 {
+  "fogOfWar": {
+    "brightnessExponent": 0.45,
+    "color": [0.015, 0.02, 0.035],
+    "transitionMs": 100,
+    "cloudColor": [0.12, 0.15, 0.2],
+    "cloudStrength": 0.65,
+    "cloudScale": 384,
+    "cloudSpeed": 1
+  },
   "passEnabled": {
     "terrain": true,
     "territory": true,

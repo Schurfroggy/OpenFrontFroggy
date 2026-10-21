@@ -302,6 +302,7 @@ export class LangSelector extends LitElement {
       "help-modal",
       "settings-modal",
       "username-input",
+      "player-flag-picker",
       "game-mode-selector",
       "graphics-preset-selector",
       "user-setting",
@@ -445,8 +446,7 @@ export class LangSelector extends LitElement {
     // The place-name option only makes sense while the UI itself is Chinese:
     // it swaps map names into Chinese, so offering it under another language
     // would produce a mixed UI rather than a translated one.
-    const showNationNames =
-      this.currentLang.toLowerCase().startsWith("zh");
+    const showNationNames = this.currentLang.toLowerCase().startsWith("zh");
     const nationNamesOn = nationNamesEnabled();
 
     return html`

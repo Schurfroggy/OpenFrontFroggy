@@ -91,6 +91,10 @@ export class MainRadialMenu implements Controller {
         return;
       }
       const clickedTile = this.game.ref(worldCoords.x, worldCoords.y);
+      if (!this.game.isTileVisible(clickedTile)) {
+        this.closeMenu();
+        return;
+      }
       this.clickedTile = clickedTile;
 
       // Spectators (replay, dead, pre-spawn): skip the action radial and open
@@ -107,6 +111,10 @@ export class MainRadialMenu implements Controller {
       myPlayer
         .actions(clickedTile)
         .then((actions) => {
+          if (!this.game.isTileVisible(clickedTile)) {
+            this.closeMenu();
+            return;
+          }
           this.updatePlayerActions(
             myPlayer,
             actions,
@@ -179,9 +187,17 @@ export class MainRadialMenu implements Controller {
     const myPlayer = this.game.myPlayer();
     if (myPlayer === null) return;
     const tile = this.clickedTile;
+    if (!this.game.isTileVisible(tile)) {
+      this.closeMenu();
+      return;
+    }
     myPlayer
       .actions(tile)
       .then((actions) => {
+        if (!this.game.isTileVisible(tile)) {
+          this.closeMenu();
+          return;
+        }
         this.updatePlayerActions(myPlayer, actions, tile);
       })
       .catch((error) => {

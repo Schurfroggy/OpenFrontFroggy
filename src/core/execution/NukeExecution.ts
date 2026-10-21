@@ -413,6 +413,8 @@ export class NukeExecution implements Execution {
       mg.queueNukeImpact(tile);
     }
 
+    mg.revealNuclearFog(toDestroy);
+
     // Then compute the explosion effect on each player
     for (const [player, numImpactedTiles] of tilesPerPlayers) {
       const tilesBeforeNuke = player.numTilesOwned() + numImpactedTiles;

@@ -104,6 +104,10 @@ export class SendBoatAttackIntentEvent implements GameEvent {
   ) {}
 }
 
+export class SendExpeditionIntentEvent implements GameEvent {
+  constructor(public readonly target: TileRef) {}
+}
+
 export class BuildUnitIntentEvent implements GameEvent {
   constructor(
     public readonly unit: UnitType,
@@ -338,6 +342,12 @@ export class Transport {
     this.subscribe(SendEmbargoIntentEvent, (e) => this.onSendEmbargoIntent(e));
     this.subscribe(SendEmbargoAllIntentEvent, (e) =>
       this.onSendEmbargoAllIntent(e),
+    );
+    this.subscribe(SendExpeditionIntentEvent, (e) =>
+      this.sendIntent({
+        type: "expedition",
+        target: e.target,
+      }),
     );
     this.subscribe(BuildUnitIntentEvent, (e) => this.onBuildUnitIntent(e));
 

@@ -56,9 +56,9 @@ describe("GameConfigSettings advanced settings", () => {
   });
 
   afterEach(() => {
-    document.querySelectorAll("game-config-settings").forEach((node) =>
-      node.remove(),
-    );
+    document
+      .querySelectorAll("game-config-settings")
+      .forEach((node) => node.remove());
     vi.unstubAllGlobals();
   });
 
@@ -105,5 +105,19 @@ describe("GameConfigSettings advanced settings", () => {
       enabled: true,
     });
     component.remove();
+  });
+
+  it("offers fog without a nuclear reveal duration input", async () => {
+    const component = document.createElement(
+      "game-config-settings",
+    ) as GameConfigSettings;
+    const config = settings(true);
+    config.options.toggles = [
+      { labelKey: "game_settings.fog_of_war", checked: true },
+    ];
+    component.settings = config;
+    document.body.append(component);
+    await component.updateComplete;
+    expect(component.querySelector('input[type="number"]')).toBeNull();
   });
 });

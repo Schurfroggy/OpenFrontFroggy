@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { knowsPlayer } from "../../game/FogOfWarIntel";
 import {
   Difficulty,
   Game,
@@ -104,7 +105,8 @@ export class NationAllianceBehavior {
 
     for (const enemy of borderingEnemies) {
       if (
-        this.random.chance(30) &&
+        knowsPlayer(this.game, this.player, enemy) &&
+        this.random.chance(this.game.config().fogOfWar() ? 15 : 30) &&
         isAcceptablePlayerType(enemy) &&
         this.player.canSendAllianceRequest(enemy) &&
         this.getAllianceDecision(enemy, false)
@@ -120,6 +122,8 @@ export class NationAllianceBehavior {
     otherPlayer: Player,
     isResponse: boolean,
   ): boolean {
+    if (this.game.config().fogOfWar())
+      return this.fogAllianceDecision(otherPlayer, isResponse);
     // Easy (dumb) nations sometimes get confused and accept/reject randomly (Just like dumb humans do)
     if (this.isConfused()) {
       return this.random.chance(2);
@@ -182,6 +186,25 @@ export class NationAllianceBehavior {
     return this.isAlliancePartnerSimilarlyStrong(otherPlayer);
   }
 
+  private fogAllianceDecision(other: Player, response: boolean): boolean {
+    const known = knowsPlayer(this.game, this.player, other);
+    if (!response && !known) return false;
+    if (other.isTraitor()) return this.random.chance(10);
+    if (this.player.relation(other) < Relation.Neutral) return false;
+    if (this.player.isAlliedWith(other)) return true;
+    if (this.player.alliances().length >= 3) return false;
+    // A received request supplies an identity, not hidden army/location data.
+    if (!known) return this.random.chance(2);
+    let chance = 75;
+    if (this.player.relation(other) >= Relation.Friendly) chance += 15;
+    if (
+      other.troops() > this.player.troops() ||
+      !this.player.sharesBorderWith(other)
+    )
+      chance += 10;
+    return this.random.nextInt(0, 100) < Math.min(95, chance);
+  }
+
   private hasTooManyAlliances(otherPlayer: Player): boolean {
     const { difficulty } = this.game.config().gameConfig();
     if (
@@ -204,7 +227,7 @@ export class NationAllianceBehavior {
   }
 
   private isRunawayLeader(otherPlayer: Player): boolean {
-    return findRunawayLeader(this.game) === otherPlayer;
+    return findRunawayLeader(this.game, this.player) === otherPlayer;
   }
 
   private isConfused(): boolean {
@@ -473,7 +496,7 @@ export class NationAllianceBehavior {
     const candidates = borderingFriends.filter((friend) =>
       this.player.isAlliedWith(friend),
     );
-    return findJuiciestTarget(this.game, candidates);
+    return findJuiciestTarget(this.game, candidates, this.player);
   }
 
   // Safe if target + non-allied neighbors + (unless target's already a traitor,

@@ -76,6 +76,7 @@ export class WarFrontsController implements Controller {
     private game: GameView,
     private eventBus: EventBus,
     private view: MapRendererFacade,
+    private fogOfWar = false,
   ) {}
 
   init(): void {
@@ -85,6 +86,7 @@ export class WarFrontsController implements Controller {
   }
 
   tick(): void {
+    if (this.fogOfWar) return;
     this.tickNukeHighlight();
     if (!this.viewModeActive) {
       if (this.arrows.length > 0) {
@@ -235,8 +237,7 @@ export class WarFrontsController implements Controller {
             dir.targetID,
           );
           if (d === null) continue;
-          const tipTiles =
-            this.measureTipExtent(pos, d, dir.targetID) * scale;
+          const tipTiles = this.measureTipExtent(pos, d, dir.targetID) * scale;
           const tail = WarFrontsController.TAIL_TILES * scale;
           const sx = pos.x - d.x * tail;
           const sy = pos.y - d.y * tail;
@@ -393,8 +394,7 @@ export class WarFrontsController implements Controller {
         // Weight: nearer rings count more (the local front shape matters
         // more than distant territory).
         const w = 1 / r;
-        const isTarget =
-          defenderID === 0 ? owner === 0 : owner === defenderID;
+        const isTarget = defenderID === 0 ? owner === 0 : owner === defenderID;
         if (isTarget) {
           defX += x * w;
           defY += y * w;
@@ -480,7 +480,8 @@ export class WarFrontsController implements Controller {
     dir: { x: number; y: number },
     defenderID: number,
   ): number {
-    for (let t = WarFrontsController.TIP_MIN_TILES + 1;
+    for (
+      let t = WarFrontsController.TIP_MIN_TILES + 1;
       t <= WarFrontsController.TIP_TILES;
       t++
     ) {

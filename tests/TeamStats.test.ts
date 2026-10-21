@@ -90,6 +90,7 @@ describe("TeamStats", () => {
       },
     ] as unknown as PlayerView[];
     const game = {
+      canViewPlayer: () => true,
       myPlayer: () => players[0],
       playerViews: () => players,
       config: () => ({ maxTroops: () => 100 }),

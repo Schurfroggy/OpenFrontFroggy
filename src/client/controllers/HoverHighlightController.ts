@@ -52,6 +52,11 @@ export class HoverHighlightController implements Controller {
     let ownerID = 0;
 
     const ref = this.game.ref(cell.x, cell.y);
+    if (!this.game.isTileVisible(ref)) {
+      this.view.setHighlightOwner(0);
+      this.lastOwnerID = 0;
+      return;
+    }
     if (this.game.isLand(ref)) {
       ownerID = this.game.tileState(ref) & OWNER_MASK;
     } else if (this.navalHighlightEnabled()) {
@@ -62,7 +67,9 @@ export class HoverHighlightController implements Controller {
         UnitType.Warship,
         UnitType.TradeShip,
         UnitType.TransportShip,
+        UnitType.ExpeditionShip,
       )) {
+        if (!this.game.isUnitVisible(u)) continue;
         const distSquared = this.game.euclideanDistSquared(ref, u.tile());
         if (distSquared < closestDistSquared) {
           closestDistSquared = distSquared;

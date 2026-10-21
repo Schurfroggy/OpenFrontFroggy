@@ -33,6 +33,7 @@ import "./components/baseComponents/Modal";
 import { BaseModal } from "./components/BaseModal";
 import "./components/ConfirmDialog";
 import { CopyButton } from "./components/CopyButton";
+import "./components/FriendInviteButton";
 import "./components/GameConfigSettings";
 import "./components/InputCard";
 import "./components/InsufficientCurrencyDialog";
@@ -41,7 +42,6 @@ import { ListLobbyOptions } from "./components/ListLobbyDialog";
 import "./components/LobbyPlayerView";
 import "./components/PlutoniumIcon";
 import "./components/ToggleInputCard";
-import "./components/FriendInviteButton";
 import { inviteFriendsButton } from "./components/ui/InviteFriendsButton";
 import { modalHeader } from "./components/ui/ModalHeader";
 import { fetchCosmetics, InsufficientCurrency } from "./Cosmetics";
@@ -114,6 +114,7 @@ export class HostLobbyModal extends BaseModal {
   @state() private nameReveals: string[] = [];
   @state() private whitelistEnabled: boolean = false;
   @state() private allowedPublicIds: string = "";
+  @state() private fogOfWar = false;
   @state() private waterNukes: boolean = false;
   @state() private lobbyId = "";
   @state() private lobbyUrlSuffix = "";
@@ -535,6 +536,7 @@ export class HostLobbyModal extends BaseModal {
         .onKeyDown=${this.handleCustomAllianceMinutesKeyDown}
       ></toggle-input-card>`,
       html`<toggle-input-card
+        ?hidden=${this.fogOfWar}
         .labelKey=${"game_settings.overtime"}
         .checked=${this.overtime}
         .inputMin=${1}
@@ -727,11 +729,17 @@ export class HostLobbyModal extends BaseModal {
                     checked: this.anonymizeNames,
                   },
                   {
+                    labelKey: "game_settings.fog_of_war",
+                    checked: this.fogOfWar,
+                  },
+                  {
                     labelKey: "game_settings.water_nukes",
+                    hidden: this.fogOfWar,
                     checked: this.waterNukes,
                   },
                   {
                     labelKey: "game_settings.doomsday_clock",
+                    hidden: this.fogOfWar,
                     checked: this.doomsdayClock,
                     doomsdayClockSpeed: this.doomsdayClockSpeed,
                   },
@@ -1127,6 +1135,7 @@ export class HostLobbyModal extends BaseModal {
     this.nameReveals = [];
     this.whitelistEnabled = false;
     this.allowedPublicIds = "";
+    this.fogOfWar = false;
     this.waterNukes = false;
     this.hostCheatsEnabled = false;
     this.hostCheatInfiniteGold = false;
@@ -1236,6 +1245,7 @@ export class HostLobbyModal extends BaseModal {
     this.nameReveals = [];
     this.whitelistEnabled = false;
     this.allowedPublicIds = "";
+    this.fogOfWar = false;
     this.waterNukes = false;
     this.disabledUnits = [...STANDARD_DISABLED_UNITS];
     this.hostCheatsEnabled = false;
@@ -1280,11 +1290,22 @@ export class HostLobbyModal extends BaseModal {
         this.anonymizeNames = checked;
         this.putGameConfig();
         break;
+      case "game_settings.fog_of_war":
+        this.fogOfWar = checked;
+        if (checked) {
+          this.waterNukes = false;
+          this.doomsdayClock = false;
+          this.overtime = false;
+        }
+        this.putGameConfig();
+        break;
       case "game_settings.water_nukes":
+        if (this.fogOfWar) break;
         this.waterNukes = checked;
         this.putGameConfig();
         break;
       case "game_settings.doomsday_clock":
+        if (this.fogOfWar) break;
         this.doomsdayClock = checked;
         this.putGameConfig();
         break;
@@ -1370,7 +1391,7 @@ export class HostLobbyModal extends BaseModal {
     checked: boolean,
     value: number | string | undefined,
   ) => {
-    this.overtime = checked;
+    this.overtime = checked && !this.fogOfWar;
     this.overtimeStartMinutes = toOptionalNumber(value);
     this.putGameConfig();
   };
@@ -1789,6 +1810,9 @@ export class HostLobbyModal extends BaseModal {
       allowedPublicIds: this.whitelistEnabled
         ? (this.parseAllowedPublicIds() ?? [])
         : [],
+      fogOfWar: {
+        enabled: this.fogOfWar,
+      },
       waterNukes: this.waterNukes ? true : null,
       hostCheats: this.hostCheatsEnabled
         ? {

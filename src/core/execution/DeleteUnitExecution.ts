@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { Execution, Game, MessageType, Player, Unit } from "../game/Game";
+import {
+  Execution,
+  Game,
+  MessageType,
+  Player,
+  Unit,
+  UnitType,
+} from "../game/Game";
 import { execSnapshotType } from "../snapshot/ExecutionSnapshot";
 import type {
   ExecRecord,
@@ -37,6 +44,10 @@ export class DeleteUnitExecution implements Execution {
       return;
     }
 
+    if (unit.type() === UnitType.ExpeditionShip) {
+      this.active = false;
+      return;
+    }
     if (!unit.isActive()) {
       console.warn(`SECURITY: unit ${this.unitId} is not active`);
       this.active = false;

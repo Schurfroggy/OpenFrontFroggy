@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { canSeeUnit } from "../game/FogOfWarIntel";
 import {
   Execution,
   Game,
@@ -147,6 +148,8 @@ export class WarshipExecution implements Execution {
       return;
     }
 
+    if (this.warship.targetUnit()?.type() === UnitType.ExpeditionShip)
+      this.shootTarget();
     this.patrol();
   }
 
@@ -279,7 +282,7 @@ export class WarshipExecution implements Execution {
     const ships = mg.nearbyUnits(
       this.warship.tile(),
       config.warshipTargettingRange(),
-      types,
+      [...types, UnitType.ExpeditionShip],
     );
 
     // Trade-ship-specific state, lazily computed.
@@ -294,6 +297,7 @@ export class WarshipExecution implements Execution {
 
     for (const { unit, distSquared } of ships) {
       if (
+        !canSeeUnit(mg, owner, unit) ||
         unit === this.warship ||
         unit.owner() === owner ||
         !owner.canAttackPlayer(unit.owner(), true) ||

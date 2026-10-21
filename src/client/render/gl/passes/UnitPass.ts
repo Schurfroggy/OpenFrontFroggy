@@ -122,6 +122,7 @@ const FLAG_TRADE_FRIENDLY = 3;
 const FLAG_RETREATING = 4;
 const FLAG_FLICKER_UNTARGETABLE = 5;
 const FLAG_TRADE_SELF = 6;
+const FLAG_EXPEDITION = 7;
 
 /** Atlas column indices for train sub-types (resolved from trainType + loaded) */
 const TRAIN_ENGINE_COL = UNIT_ORDER.indexOf("TrainEngine");
@@ -286,6 +287,11 @@ export class UnitPass {
         this.typeToAtlasCol.set(header.unitTypes[i], col);
       }
     }
+
+    this.typeToAtlasCol.set(
+      "Expedition Ship",
+      UNIT_ORDER.indexOf(UT_TRANSPORT),
+    );
 
     // Compile shaders
     this.program = createProgram(
@@ -518,6 +524,7 @@ export class UnitPass {
         // Untargetable nukes render dimmed so players can tell SAMs can't hit them
         flags = unit.targetable ? FLAG_FLICKER : FLAG_FLICKER_UNTARGETABLE;
       }
+      if (unit.unitType === "Expedition Ship") flags = FLAG_EXPEDITION;
       const isMissile = MISSILE_TYPES.has(unit.unitType);
 
       const x = unit.pos % this.mapW;

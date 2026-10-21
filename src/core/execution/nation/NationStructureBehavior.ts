@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { canSeeUnit } from "../../game/FogOfWarIntel";
 import {
   Attack,
   Difficulty,
@@ -1215,7 +1216,7 @@ export class NationStructureBehavior {
         UnitType.Port,
         UnitType.Factory,
       )) {
-        if (unitToCluster.has(unit)) {
+        if (canSeeUnit(game, player, unit) && unitToCluster.has(unit)) {
           result.push({
             tile: unit.tile(),
             cluster: unitToCluster.get(unit)!,

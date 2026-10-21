@@ -1,5 +1,11 @@
 import { z } from "zod";
 import {
+  canSeeTile,
+  canSeeUnit,
+  knownPlayers,
+  knowsPlayer,
+} from "../../game/FogOfWarIntel";
+import {
   Difficulty,
   Game,
   GameMode,
@@ -158,17 +164,36 @@ export class NationNukeBehavior {
     }
     const range = this.game.config().nukeMagnitudes(nukeType).outer;
 
-    const structures = nukeTarget.units(Structures.types);
+    const structures = nukeTarget
+      .units(Structures.types)
+      .filter((u) => canSeeUnit(this.game, this.player, u));
     const structureTiles = structures.map((u) => u.tile());
     const difficulty = this.game.config().gameConfig().difficulty;
     // Use more random tiles on Impossible difficulty to improve chances of finding a perfect SAM outranging spot
     const numRandomTiles = difficulty === Difficulty.Impossible ? 30 : 10;
-    const randomTiles = randTerritoryTileArray(
-      this.random,
-      this.game,
-      nukeTarget,
-      numRandomTiles,
-    );
+    const visibleBorder = this.game.config().fogOfWar()
+      ? [...nukeTarget.borderTiles()].filter((t) =>
+          canSeeTile(this.game, this.player, t),
+        )
+      : [];
+    const randomTiles = this.game.config().fogOfWar()
+      ? visibleBorder
+          .filter(
+            (_, i) =>
+              i %
+                Math.max(
+                  1,
+                  Math.floor(visibleBorder.length / numRandomTiles),
+                ) ===
+              0,
+          )
+          .slice(0, numRandomTiles)
+      : randTerritoryTileArray(
+          this.random,
+          this.game,
+          nukeTarget,
+          numRandomTiles,
+        );
     const allTiles = randomTiles.concat(structureTiles);
 
     let bestTile: TileRef | null = null;
@@ -223,6 +248,27 @@ export class NationNukeBehavior {
   }
 
   findBestNukeTarget(): Player | null {
+    if (this.game.config().fogOfWar()) {
+      const targets = knownPlayers(this.game, this.player).filter(
+        (p) =>
+          p !== this.player &&
+          p.type() !== PlayerType.Bot &&
+          !this.player.isFriendly(p) &&
+          [...p.borderTiles()].some((t) =>
+            canSeeTile(this.game, this.player, t),
+          ),
+      );
+      const incoming = new Set(
+        this.player.incomingAttacks().map((a) => a.attacker()),
+      );
+      targets.sort(
+        (a, b) =>
+          Number(incoming.has(b)) - Number(incoming.has(a)) ||
+          this.player.relation(a) - this.player.relation(b) ||
+          b.numTilesOwned() - a.numTilesOwned(),
+      );
+      return targets[0] ?? null;
+    }
     // On Hard & Impossible with only 2 players left, target the only other one
     const { difficulty: diff } = this.game.config().gameConfig();
     if (
@@ -397,7 +443,7 @@ export class NationNukeBehavior {
 
     // Below that, only a runaway leader that is far enough ahead of us.
     // Its neighbors react first, everyone else once the gap is twice as big.
-    if (findRunawayLeader(this.game) !== firstPlace) {
+    if (findRunawayLeader(this.game, this.player) !== firstPlace) {
       return null;
     }
 
@@ -498,6 +544,7 @@ export class NationNukeBehavior {
 
   // Simulate saving up for a MIRV
   private getPerceivedNukeCost(type: UnitType): Gold {
+    if (this.game.config().fogOfWar()) return this.cost(type);
     // If only 2 players left, use actual cost (no point saving for MIRV)
     if (this.game.players().length === 2) {
       return this.cost(type);
@@ -582,6 +629,7 @@ export class NationNukeBehavior {
 
     // Check if any teammate's nuke blast radius overlaps with ours
     for (const nuke of activeNukes) {
+      if (!canSeeUnit(this.game, this.player, nuke)) continue;
       const nukeOwner = nuke.owner();
 
       // Skip our own nukes and non-teammate nukes
@@ -678,6 +726,7 @@ export class NationNukeBehavior {
       );
 
       for (const sam of nearbySams) {
+        if (!canSeeUnit(this.game, this.player, sam.unit)) continue;
         const owner = sam.unit.owner();
         if (owner === this.player || this.player.isFriendly(owner)) {
           continue;
@@ -699,6 +748,7 @@ export class NationNukeBehavior {
   private isValidNukeTile(t: TileRef, nukeTarget: Player | null): boolean {
     const difficulty = this.game.config().gameConfig().difficulty;
 
+    if (!canSeeTile(this.game, this.player, t)) return true;
     const owner = this.game.owner(t);
     if (owner === nukeTarget) return true;
     // On Hard & Impossible, allow TerraNullius (hit small islands) and in team games other non-friendly players
@@ -774,6 +824,7 @@ export class NationNukeBehavior {
       );
 
       for (const sam of nearbySams) {
+        if (!canSeeUnit(this.game, this.player, sam.unit)) continue;
         const samLevel = sam.unit.level();
         if (samLevel >= 5) continue; // Can't outrange level 5+ SAMs
 
@@ -822,6 +873,11 @@ export class NationNukeBehavior {
     targetPlayer: Player,
     waitTicks = 0,
   ) {
+    if (
+      !canSeeTile(this.game, this.player, tile) ||
+      !knowsPlayer(this.game, this.player, targetPlayer)
+    )
+      return;
     const tick = this.game.ticks();
     this.recentlySentNukes.push([tick, tile, nukeType]);
     if (nukeType === UnitType.AtomBomb) {
@@ -858,7 +914,9 @@ export class NationNukeBehavior {
     }
 
     const atomCost = this.cost(UnitType.AtomBomb);
-    const enemySams = nukeTarget.units(UnitType.SAMLauncher);
+    const enemySams = nukeTarget
+      .units(UnitType.SAMLauncher)
+      .filter((u) => canSeeUnit(this.game, this.player, u));
     if (enemySams.length === 0) {
       return;
     }
@@ -1085,6 +1143,7 @@ export class NationNukeBehavior {
 
     const result: Unit[] = [];
     for (const sam of nearbySams) {
+      if (!canSeeUnit(this.game, this.player, sam.unit)) continue;
       const owner = sam.unit.owner();
       if (owner === this.player || this.player.isFriendly(owner)) {
         continue;

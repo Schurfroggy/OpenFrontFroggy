@@ -1,5 +1,6 @@
 import { html, LitElement, nothing, type TemplateResult } from "lit";
 import { customElement, state } from "lit/decorators.js";
+import { repeat } from "lit/directives/repeat.js";
 import { ClientEnv } from "src/client/ClientEnv";
 import { UserMeResponse } from "../core/ApiSchemas";
 import {
@@ -54,10 +55,12 @@ import {
   type BackendReachabilityDetail,
 } from "./ServerList";
 import { SinglePlayerModal } from "./SinglePlayerModal";
+import { terrainMapFileLoader } from "./TerrainMapFileLoader";
 import { UsernameInput } from "./UsernameInput";
 import {
   calculateServerTimeOffset,
   getGamesPlayed,
+  getMapName,
   getSecondsUntilServerTimestamp,
   reloadForUpdate,
   renderDuration,
@@ -380,6 +383,13 @@ export class GameModeSelector extends LitElement {
   @state() private selfHostedMapWins: Map<GameMapType, Set<Difficulty>> =
     new Map();
   private selfHostedRotationTimer: number | undefined;
+  private selfHostedCarouselHovered = false;
+  private selfHostedCarouselFocused = false;
+  private selfHostedLastInteraction = -Infinity;
+  private selfHostedLastStep = -Infinity;
+  private selfHostedWheelTime = -Infinity;
+  private selfHostedWheelDelta = 0;
+  private selfHostedWheelConsumed = false;
   private selfHostedAchievementLoad = 0;
   private selfHostedAchievementReloadTimer: number | undefined;
 
@@ -644,10 +654,16 @@ export class GameModeSelector extends LitElement {
   private startSelfHostedRotation() {
     window.clearInterval(this.selfHostedRotationTimer);
     this.rotateSelfHostedPreset();
-    this.selfHostedRotationTimer = window.setInterval(
-      () => this.rotateSelfHostedPreset(),
-      SELF_HOSTED_PRESET_ROTATION_MS,
-    );
+    this.selfHostedRotationTimer = window.setInterval(() => {
+      if (
+        !this.selfHostedCarouselHovered &&
+        !this.selfHostedCarouselFocused &&
+        !this.selectedSelfHostedPreset &&
+        performance.now() - this.selfHostedLastInteraction >=
+          SELF_HOSTED_PRESET_ROTATION_MS
+      )
+        this.rotateSelfHostedPreset();
+    }, SELF_HOSTED_PRESET_ROTATION_MS);
   }
 
   private rotateSelfHostedPreset() {
@@ -869,72 +885,121 @@ export class GameModeSelector extends LitElement {
   }
 
   private renderSelfHosted() {
-    const preset = this.selfHostedPresets[this.selfHostedPresetIndex] ?? {
-      map: GameMapType.World,
-      mode: GameMode.FFA,
-    };
-    const modeLabel = translateText(
-      preset.mode === GameMode.FFA ? "game_mode.ffa" : "game_mode.teams",
-    );
-    const previewLobby = {
-      gameID: "self-hosted-featured",
-      numClients: 0,
-      publicGameType: preset.mode === GameMode.FFA ? "ffa" : "team",
-      gameConfig: {
-        gameMap: preset.map,
-        gameMode: preset.mode,
-        gameType: GameType.Singleplayer,
-        playerTeams: 2,
-      },
-    } as PublicGameInfo;
-
     return html`
       <div
-        class="flex flex-col gap-4 w-full max-w-5xl px-4 pb-4 mx-auto sm:px-0"
+        class="self-hosted-home flex flex-col gap-4 w-full max-w-5xl px-4 pb-4 mx-auto sm:px-0"
       >
-        <div class="relative min-w-0">
-          ${lobbyCard({
-            lobby: previewLobby,
-            subtitle: modeLabel,
-            timeDisplay: translateText("mode_selector.local_featured"),
-            timeDisplayUppercase: true,
-            disabled: !this.inputValid,
-            onClick: () => this.openSelfHostedPresetChoice(preset),
-            heightClass: "h-52 sm:h-[min(24rem,40vh)]",
-            showPlayerCount: false,
-          })}
-          ${this.renderSelfHostedAchievement(preset.map)}
-          <button
-            class="absolute left-2 top-1/2 z-10 flex size-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/65 text-2xl text-white shadow-lg transition-colors hover:bg-black/85"
-            aria-label=${translateText("mode_selector.local_previous")}
-            @click=${() => this.changeSelfHostedPreset(-1)}
-          >
-            ‹
-          </button>
-          <button
-            class="absolute right-2 top-1/2 z-10 flex size-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/65 text-2xl text-white shadow-lg transition-colors hover:bg-black/85"
-            aria-label=${translateText("mode_selector.local_next")}
-            @click=${() => this.changeSelfHostedPreset(1)}
-          >
-            ›
-          </button>
-          <div
-            class="absolute bottom-2 left-1/2 z-10 flex -translate-x-1/2 gap-1.5 rounded-full bg-black/60 px-2.5 py-1.5"
-          >
-            ${this.selfHostedPresets.map(
-              (_, index) => html`
-                <button
-                  class="size-2 rounded-full transition-colors ${index ===
-                  this.selfHostedPresetIndex
-                    ? "bg-malibu-blue"
-                    : "bg-white/45 hover:bg-white/75"}"
-                  aria-label="${index + 1}/${this.selfHostedPresets.length}"
-                  @click=${() => (this.selfHostedPresetIndex = index)}
-                ></button>
-              `,
+        <section
+          class="map-carousel"
+          aria-roledescription="carousel"
+          aria-label=${translateText("mode_selector.local_featured")}
+          @mouseenter=${() => (this.selfHostedCarouselHovered = true)}
+          @mouseleave=${() => (this.selfHostedCarouselHovered = false)}
+          @focusin=${() => (this.selfHostedCarouselFocused = true)}
+          @focusout=${(event: FocusEvent) => {
+            this.selfHostedCarouselFocused = (
+              event.currentTarget as HTMLElement
+            ).contains(event.relatedTarget as Node | null);
+          }}
+          @wheel=${this.onSelfHostedWheel}
+          @keydown=${this.onSelfHostedCarouselKey}
+        >
+          <div class="map-carousel-stage">
+            ${repeat(
+              this.selfHostedPresets,
+              (preset) => preset.map,
+              (preset, index) => {
+                const count = this.selfHostedPresets.length;
+                let offset =
+                  (index - this.selfHostedPresetIndex + count) % count;
+                if (offset > count / 2) offset -= count;
+                const active = offset === 0;
+                const visible = Math.abs(offset) <= 1;
+                const mapName = getMapName(preset.map) ?? preset.map;
+                return html`
+                  <div
+                    class="map-carousel-card"
+                    data-offset=${offset}
+                    aria-hidden=${!visible}
+                  >
+                    <button
+                      class="map-carousel-map"
+                      tabindex=${visible ? 0 : -1}
+                      aria-label=${mapName}
+                      ?disabled=${active && !this.inputValid}
+                      @click=${() =>
+                        active
+                          ? this.openSelfHostedPresetChoice(preset)
+                          : this.changeSelfHostedPreset(offset)}
+                    >
+                      <img
+                        src=${terrainMapFileLoader.getMapData(preset.map)
+                          .webpPath}
+                        alt=""
+                        draggable="false"
+                      />
+                      <span class="map-carousel-shade"></span>
+                      <span class="map-carousel-details">
+                        <span class="map-carousel-title">${mapName}</span>
+                        <span class="map-carousel-mode"
+                          >${translateText(
+                            preset.mode === GameMode.FFA
+                              ? "game_mode.ffa"
+                              : "game_mode.teams",
+                          )}</span
+                        >
+                      </span>
+                    </button>
+                    <div class="map-carousel-achievement">
+                      ${this.renderSelfHostedAchievement(preset.map)}
+                    </div>
+                  </div>
+                `;
+              },
             )}
           </div>
-        </div>
+          <div class="map-carousel-controls">
+            <button
+              class="map-carousel-arrow"
+              aria-label=${translateText("mode_selector.local_previous")}
+              @click=${() => this.changeSelfHostedPreset(-1)}
+            >
+              ‹
+            </button>
+            <div class="map-carousel-dots">
+              ${this.selfHostedPresets.map(
+                (_, index) => html`
+                  <button
+                    class="map-carousel-dot"
+                    aria-label="${index + 1}/${this.selfHostedPresets.length}"
+                    aria-current=${index === this.selfHostedPresetIndex
+                      ? "true"
+                      : "false"}
+                    @click=${() =>
+                      this.changeSelfHostedPreset(
+                        index - this.selfHostedPresetIndex,
+                      )}
+                  ></button>
+                `,
+              )}
+            </div>
+            <button
+              class="map-carousel-arrow"
+              aria-label=${translateText("mode_selector.local_next")}
+              @click=${() => this.changeSelfHostedPreset(1)}
+            >
+              ›
+            </button>
+          </div>
+          <span class="sr-only" aria-live="polite" aria-atomic="true"
+            >${getMapName(
+              this.selfHostedPresets[this.selfHostedPresetIndex]?.map,
+            )}
+            ·
+            ${this.selfHostedPresetIndex + 1}/${this.selfHostedPresets
+              .length}</span
+          >
+        </section>
 
         <div class="flex gap-4 h-14">
           <div class="flex-[2]">
@@ -972,11 +1037,48 @@ export class GameModeSelector extends LitElement {
     `;
   }
 
-  private changeSelfHostedPreset(offset: number) {
+  private onSelfHostedWheel = (event: WheelEvent) => {
+    if (event.ctrlKey || Math.abs(event.deltaX) > Math.abs(event.deltaY))
+      return;
+    if (!event.deltaY) return;
+    event.preventDefault();
+    const now = performance.now();
+    if (now - this.selfHostedWheelTime > 180) {
+      this.selfHostedWheelDelta = 0;
+      this.selfHostedWheelConsumed = false;
+    }
+    this.selfHostedWheelTime = now;
+    this.selfHostedLastInteraction = now;
+    if (this.selfHostedWheelConsumed) return;
+    const delta =
+      event.deltaY *
+      (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 400 : 1);
+    this.selfHostedWheelDelta += delta;
+    if (Math.abs(this.selfHostedWheelDelta) < 35) return;
+    this.selfHostedWheelConsumed = this.changeSelfHostedPreset(
+      Math.sign(this.selfHostedWheelDelta),
+    );
+  };
+
+  private onSelfHostedCarouselKey = (event: KeyboardEvent) => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const offset = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[
+      event.key
+    ];
+    if (offset === undefined) return;
+    event.preventDefault();
+    this.changeSelfHostedPreset(offset);
+  };
+
+  private changeSelfHostedPreset(offset: number): boolean {
+    const now = performance.now();
+    this.selfHostedLastInteraction = now;
     const count = this.selfHostedPresets.length;
-    if (count === 0) return;
+    if (!count || !offset || now - this.selfHostedLastStep < 450) return false;
+    this.selfHostedLastStep = now;
     this.selfHostedPresetIndex =
-      (this.selfHostedPresetIndex + offset + count) % count;
+      (((this.selfHostedPresetIndex + offset) % count) + count) % count;
+    return true;
   }
 
   private openSelfHostedPresetChoice(preset: SelfHostedFeaturedPreset) {

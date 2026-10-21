@@ -65,6 +65,7 @@ export class BarPass {
 
   private mapW: number;
   private warshipMaxHealth: number;
+  private expeditionMaxHealth: number;
   private veterancyHealthBonus: number;
 
   constructor(
@@ -77,6 +78,8 @@ export class BarPass {
     this.settings = settings;
     this.mapW = header.mapWidth;
     this.warshipMaxHealth = config.unitInfo(UnitType.Warship).maxHealth ?? 0;
+    this.expeditionMaxHealth =
+      config.unitInfo(UnitType.ExpeditionShip).maxHealth ?? 250;
     this.veterancyHealthBonus = config.warshipVeterancyHealthBonus();
 
     // --- Shader program ---
@@ -140,17 +143,19 @@ export class BarPass {
     this.veterancyCount = 0;
 
     // --- Health bars + veterancy pips (warships) ---
-    // Only warships carry health among mobile units, so this loop is effectively
-    // warship-only.
+    // Expedition ships use their own health ceiling; veterancy applies to warships.
     for (const unit of mobileUnits.values()) {
       if (unit.health === null || unit.health <= 0) continue;
       // Veteran warships have a higher effective max health, so a full veteran
       // ship reads as full. Shared with the engine's UnitImpl.maxHealth().
-      const maxHealth = maxHealthWithVeterancy(
-        this.warshipMaxHealth,
-        unit.veterancy,
-        this.veterancyHealthBonus,
-      );
+      const maxHealth =
+        unit.unitType === UnitType.ExpeditionShip
+          ? this.expeditionMaxHealth
+          : maxHealthWithVeterancy(
+              this.warshipMaxHealth,
+              unit.veterancy,
+              this.veterancyHealthBonus,
+            );
       if (unit.health < maxHealth) {
         this.pushHealth(unit, unit.health / maxHealth);
       }

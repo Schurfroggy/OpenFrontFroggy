@@ -97,6 +97,7 @@ function makeRunner(overrides: {
     troops: () => 100,
   };
   const gameView = {
+    isTileVisible: () => true,
     config: () => ({ isRandomSpawn: () => false, isReplay: () => false }),
     inSpawnPhase: () => overrides.inSpawnPhase ?? false,
     myPlayer: () => null,
@@ -148,6 +149,17 @@ afterEach(() => {
 });
 
 describe("left click", () => {
+  it("ignores a target click already consumed by expedition dispatch", async () => {
+    const { eventBus, myPlayer } = makeRunner({ actions: { canAttack: true } });
+    const attack = vi.fn();
+    eventBus.on(SendAttackIntentEvent, attack);
+    const click = new MouseUpEvent(CLICK.x, CLICK.y);
+    click.handled = true;
+    eventBus.emit(click);
+    await flushPromises();
+    expect(myPlayer.actions).not.toHaveBeenCalled();
+    expect(attack).not.toHaveBeenCalled();
+  });
   it("emits a spawn intent when clicking unowned land during the spawn phase", () => {
     const { eventBus } = makeRunner({ inSpawnPhase: true });
     const spawns: SendSpawnIntentEvent[] = [];

@@ -149,3 +149,36 @@ describe("SinglePlayerModal start", () => {
     }
   });
 });
+
+describe("singleplayer fog mode exclusivity", () => {
+  it("turns off conflicting modes and prevents re-enabling them until fog is off", () => {
+    const modal = createModal();
+    modal.waterNukes = true;
+    modal.doomsdayClock = true;
+    modal.overtime = true;
+    const toggle = (labelKey: string, checked: boolean) =>
+      modal.handleConfigOptionToggleChanged(
+        new CustomEvent("option-toggle-changed", {
+          detail: { labelKey, checked },
+        }),
+      );
+    toggle("game_settings.fog_of_war", true);
+    expect(modal.fogOfWar).toBe(true);
+    expect([modal.waterNukes, modal.doomsdayClock, modal.overtime]).toEqual([
+      false,
+      false,
+      false,
+    ]);
+    toggle("game_settings.water_nukes", true);
+    toggle("game_settings.doomsday_clock", true);
+    modal.handleOvertimeToggle(true, 10);
+    expect([modal.waterNukes, modal.doomsdayClock, modal.overtime]).toEqual([
+      false,
+      false,
+      false,
+    ]);
+    toggle("game_settings.fog_of_war", false);
+    toggle("game_settings.water_nukes", true);
+    expect(modal.waterNukes).toBe(true);
+  });
+});

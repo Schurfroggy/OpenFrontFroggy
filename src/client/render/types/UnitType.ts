@@ -11,6 +11,7 @@
 // ---------------------------------------------------------------------------
 
 // Mobile units
+export const UT_EXPEDITION_SHIP = "Expedition Ship" as const;
 export const UT_TRANSPORT = "Transport" as const;
 export const UT_TRADE_SHIP = "Trade Ship" as const;
 export const UT_WARSHIP = "Warship" as const;
@@ -99,4 +100,5 @@ export const ALL_UNIT_TYPES = [
   UT_SAM_LAUNCHER,
   UT_MISSILE_SILO,
   UT_TRAIN,
+  UT_EXPEDITION_SHIP,
 ] as const;

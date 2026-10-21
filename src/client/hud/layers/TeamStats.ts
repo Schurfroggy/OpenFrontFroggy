@@ -52,6 +52,7 @@ export class TeamStats extends StatsTable {
     const myTeam = game.myPlayer()?.team() ?? null;
 
     for (const player of game.playerViews()) {
+      if (!game.canViewPlayer(player)) continue;
       const team = player.team();
       if (team === null) continue;
       const players = teams.get(team) ?? [];

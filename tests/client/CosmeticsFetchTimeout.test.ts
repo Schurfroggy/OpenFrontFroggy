@@ -1,11 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getUserMe } from "../../src/client/Api";
+import { ClientEnv } from "../../src/client/ClientEnv";
 import {
   COSMETICS_FETCH_TIMEOUT_MS,
   fetchCosmetics,
+  getPlayerCosmetics,
+  getPlayerCosmeticsRefs,
   invalidateCosmetics,
   prewarmCosmetics,
 } from "../../src/client/Cosmetics";
+import { UserSettings } from "../../src/core/game/UserSettings";
 
 vi.mock("../../src/client/Api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../src/client/Api")>()),
@@ -128,5 +132,24 @@ describe("prewarmCosmetics", () => {
     vi.mocked(getUserMe).mockRejectedValueOnce(new Error("offline"));
 
     await expect(prewarmCosmetics()).resolves.toBeUndefined();
+  });
+});
+
+describe("self-hosted bundled country flags", () => {
+  afterEach(() => {
+    new UserSettings().clearFlag(true);
+    vi.restoreAllMocks();
+  });
+
+  it("keeps the multiplayer reference and resolves the single-player image without the catalog", async () => {
+    vi.spyOn(ClientEnv, "selfHosted").mockReturnValue(true);
+    vi.mocked(getUserMe).mockResolvedValue(false);
+    const settings = new UserSettings();
+    settings.setFlag("country:cn");
+    const refs = await getPlayerCosmeticsRefs();
+    expect(refs.flag).toBe("country:cn");
+    const cosmetics = await getPlayerCosmetics();
+    expect(cosmetics.flag).toMatch(/flags\/cn\.svg$/);
+    expect(settings.getFlag()).toBe("country:cn");
   });
 });

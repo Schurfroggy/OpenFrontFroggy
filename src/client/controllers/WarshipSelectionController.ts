@@ -49,6 +49,7 @@ export class WarshipSelectionController implements Controller {
     private eventBus: EventBus,
     private transformHandler: TransformHandler,
     private view: MapRenderer,
+    private uiState?: import("../UIState").UIState,
   ) {}
 
   tick() {
@@ -170,6 +171,7 @@ export class WarshipSelectionController implements Controller {
     clickRef?: TileRef,
     nearbyWarships?: UnitView[],
   ) {
+    if (event.handled || this.uiState?.expeditionSelecting) return;
     if (clickRef === undefined) {
       const cell = this.transformHandler.screenToWorldCoordinates(
         event.x,

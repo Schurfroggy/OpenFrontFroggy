@@ -754,3 +754,402 @@ unit-display .tutorial-highlight::after {
 .remove-player-btn:hover {
   background: #ef4444;
 }
+
+/* Keep the local player's name at the leading edge of the desktop nav. */
+.self-hosted-nav-identity {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  left: clamp(24px, 3vw, 48px);
+  z-index: 10;
+  max-width: min(320px, 24vw);
+  color: white;
+}
+
+.self-hosted-nav-identity username-input > div > div {
+  padding-inline: 0;
+  font-size: 32px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+}
+
+/* Desktop featured maps: stable cards move between five depth positions. */
+.map-carousel {
+  position: relative;
+  isolation: isolate;
+  padding: 12px 0 0;
+}
+
+/* Let the featured maps extend beyond the narrower identity/action column. */
+@media (min-width: 1024px) {
+  .main-layout-content:has(.map-carousel) {
+    overflow-x: visible;
+  }
+
+  .self-hosted-home {
+    padding-top: 36px;
+  }
+
+  .map-carousel {
+    width: min(94vw, 1440px);
+    margin-inline: calc((100% - min(94vw, 1440px)) / 2);
+  }
+}
+
+.map-carousel-stage {
+  position: relative;
+  height: clamp(360px, calc(100dvh - 340px), 720px);
+  perspective: 1200px;
+  overflow: hidden;
+  overflow: clip;
+}
+
+.map-carousel-card {
+  position: absolute;
+  inset: 12px 18% 22px;
+  transform: translateX(0) translateZ(0) rotateY(0);
+  opacity: 1;
+  z-index: 3;
+  transition:
+    transform 420ms cubic-bezier(0.22, 0.68, 0, 1),
+    opacity 420ms ease,
+    filter 420ms ease;
+  filter: brightness(1);
+}
+
+.map-carousel-card[data-offset="-1"] {
+  transform: translateX(-59%) translateZ(-140px) rotateY(32deg) scale(0.88);
+  z-index: 2;
+  filter: brightness(0.58);
+}
+
+.map-carousel-card[data-offset="1"] {
+  transform: translateX(59%) translateZ(-140px) rotateY(-32deg) scale(0.88);
+  z-index: 2;
+  filter: brightness(0.58);
+}
+
+.map-carousel-card[data-offset="-2"],
+.map-carousel-card[data-offset="2"] {
+  transform: translateX(-100%) translateZ(-260px) rotateY(45deg) scale(0.7);
+  opacity: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.map-carousel-card[data-offset="2"] {
+  transform: translateX(100%) translateZ(-260px) rotateY(-45deg) scale(0.7);
+}
+
+.map-carousel-map {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 20px;
+  border: 1px solid rgb(255 255 255 / 18%);
+  background: #0a1628;
+  color: white;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 12px 20px rgb(0 0 0 / 35%);
+}
+
+.map-carousel-map:focus-visible,
+.map-carousel-arrow:focus-visible,
+.map-carousel-dot:focus-visible {
+  outline: 2px solid #3fa9f5;
+  outline-offset: 3px;
+}
+
+.map-carousel-card[data-offset="0"] .map-carousel-map {
+  border-color: rgb(63 169 245 / 50%);
+  box-shadow:
+    0 12px 22px rgb(0 0 0 / 45%),
+    0 0 18px rgb(0 132 209 / 12%);
+}
+
+.map-carousel-map:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.map-carousel-map img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}
+
+.map-carousel-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(transparent 45%, rgb(4 12 25 / 90%));
+}
+
+.map-carousel-details {
+  position: absolute;
+  inset: auto 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.map-carousel-title {
+  font-size: clamp(20px, 2.5vw, 32px);
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.map-carousel-mode {
+  font-size: 13px;
+  color: rgb(255 255 255 / 65%);
+}
+
+.map-carousel-achievement {
+  position: absolute;
+  inset: 8px;
+  pointer-events: none;
+}
+
+.map-carousel-mode,
+.map-carousel-achievement {
+  transition: opacity 300ms ease;
+}
+
+.map-carousel-card:not([data-offset="0"]) .map-carousel-mode,
+.map-carousel-card:not([data-offset="0"]) .map-carousel-achievement {
+  opacity: 0;
+}
+
+.map-carousel-controls,
+.map-carousel-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.map-carousel-controls {
+  gap: 20px;
+}
+
+.map-carousel-arrow {
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgb(255 255 255 / 15%);
+  border-radius: 50%;
+  background: rgb(255 255 255 / 5%);
+  color: white;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.map-carousel-arrow:hover {
+  background: rgb(63 169 245 / 25%);
+}
+
+.map-carousel-dot {
+  position: relative;
+  width: 20px;
+  height: 28px;
+  cursor: pointer;
+}
+
+.map-carousel-dot::after {
+  content: "";
+  position: absolute;
+  top: 10px;
+  left: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 35%);
+  transition:
+    background 200ms,
+    transform 200ms;
+}
+
+.map-carousel-dot[aria-current="true"]::after {
+  background: #3fa9f5;
+  transform: scale(1.25);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-carousel-card,
+  .map-carousel-mode,
+  .map-carousel-achievement,
+  .map-carousel-dot::after {
+    transition: none;
+  }
+}
+
+.self-hosted-nav-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.self-hosted-nav-identity username-input {
+  flex: 1;
+}
+
+player-flag-picker {
+  display: block;
+  flex-shrink: 0;
+}
+
+.player-flag-trigger {
+  display: block;
+  width: fit-content;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: white;
+  font-size: 64px;
+  line-height: 1;
+}
+
+.player-flag-trigger img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 88px;
+  max-height: 60px;
+}
+
+.player-flag-dialog {
+  width: min(880px, calc(100vw - 64px));
+  max-height: 80dvh;
+  padding: 24px;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 20px;
+  background: #0a1628;
+  color: white;
+  overflow-y: auto;
+  box-shadow: 0 24px 80px rgb(0 0 0 / 55%);
+}
+
+.player-flag-dialog::backdrop {
+  background: rgb(0 0 0 / 65%);
+  backdrop-filter: blur(6px);
+}
+
+.player-flag-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.player-flag-header button {
+  width: 40px;
+  height: 40px;
+  font-size: 32px;
+}
+
+.player-flag-hint {
+  margin-block: 8px 16px;
+  color: rgb(255 255 255 / 65%);
+  font-size: 14px;
+}
+
+.player-flag-search {
+  margin-top: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 5%);
+  color: white;
+}
+
+.player-flag-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 12px;
+}
+
+.player-flag-option {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 8px;
+  min-height: 108px;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 4%);
+  text-align: center;
+  font-size: 13px;
+}
+
+.player-flag-option img,
+.player-flag-empty {
+  width: 72px;
+  height: 48px;
+  object-fit: contain;
+  font-size: 32px;
+}
+
+.player-flag-option:hover,
+.player-flag-option[aria-pressed="true"] {
+  border-color: #3fa9f5;
+  background: rgb(63 169 245 / 15%);
+}
+
+.player-flag-trigger:focus-visible,
+.player-flag-dialog button:focus-visible,
+.player-flag-search:focus-visible {
+  outline: 2px solid #3fa9f5;
+  outline-offset: 3px;
+}
+
+.player-flag-more {
+  display: block;
+  margin: 20px auto 0;
+  padding: 10px 24px;
+  border-radius: 8px;
+  background: #0084d1;
+}
+
+.player-flag-tile {
+  position: relative;
+}
+
+.player-flag-favorite {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 40%);
+  backdrop-filter: blur(4px);
+  color: rgb(255 255 255 / 70%);
+  transition:
+    color 150ms,
+    transform 150ms;
+}
+
+.player-flag-favorite:hover,
+.player-flag-favorite[aria-pressed="true"] {
+  color: var(--color-cyber-yellow);
+}
+
+.player-flag-favorite:active {
+  transform: scale(0.9);
+}

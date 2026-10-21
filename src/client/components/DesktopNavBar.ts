@@ -1,4 +1,4 @@
-import { LitElement, html, nothing } from "lit";
+import { html, LitElement, nothing } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { assetUrl } from "../../core/AssetUrls";
 import { ClientEnv } from "../ClientEnv";
@@ -11,6 +11,7 @@ import { showToast, translateText } from "../Utils";
 import "./NavAccountMenu";
 import { NavNotificationsController } from "./NavNotificationsController";
 import "./NavUtilityIcons";
+import "./PlayerFlagPicker";
 
 @customElement("desktop-nav-bar")
 export class DesktopNavBar extends LitElement {
@@ -58,8 +59,12 @@ export class DesktopNavBar extends LitElement {
 
   private _onInbox = (event: Event) => {
     this._applyInbox(
-      (event as CustomEvent<{ invites?: unknown[]; friendRequests?: unknown[] } | null>)
-        .detail,
+      (
+        event as CustomEvent<{
+          invites?: unknown[];
+          friendRequests?: unknown[];
+        } | null>
+      ).detail,
     );
   };
 
@@ -113,6 +118,12 @@ export class DesktopNavBar extends LitElement {
       <nav
         class="hidden lg:flex w-full bg-zinc-900/90 backdrop-blur-md items-center justify-center gap-8 py-4 shrink-0 z-50 relative"
       >
+        ${ClientEnv.selfHosted?.() === true
+          ? html`<div class="self-hosted-nav-identity">
+              <player-flag-picker></player-flag-picker>
+              <username-input class="block h-11 min-w-0"></username-input>
+            </div>`
+          : nothing}
         <div class="flex flex-col items-center justify-center">
           <div class="h-8">
             <img

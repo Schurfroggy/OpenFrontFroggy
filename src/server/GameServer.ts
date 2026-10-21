@@ -19,6 +19,7 @@ import {
   Trios,
 } from "../core/game/Game";
 import { maps } from "../core/game/Maps.gen";
+import { normalizeSpecialModes } from "../core/game/SpecialModes";
 import {
   assignTeamsLobbyPreview,
   resolveTeamsList,
@@ -298,7 +299,7 @@ export class GameServer {
   constructor(opts: GameServerOptions, deps: Partial<GameServerDeps> = {}) {
     this.id = opts.id;
     this.createdAt = opts.createdAt;
-    this.gameConfig = opts.gameConfig;
+    this.gameConfig = normalizeSpecialModes(opts.gameConfig);
     this.creatorPersistentID = opts.creatorPersistentID;
     this.startsAt = opts.startsAt;
     this.publicGameType = opts.publicGameType;

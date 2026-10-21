@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { canSeeTile, canSeeUnit, knownPlayers } from "../../game/FogOfWarIntel";
 import {
   AllPlayers,
   Difficulty,
@@ -131,6 +132,7 @@ export class NationMIRVBehavior {
   }
 
   considerMIRV(): boolean {
+    if (this.game.config().fogOfWar()) return this.considerFogMIRV();
     if (this.player === null) throw new Error("not initialized");
     if (this.game.config().isUnitDisabled(UnitType.MIRV)) {
       return false;
@@ -164,6 +166,52 @@ export class NationMIRVBehavior {
       return true;
     }
 
+    return false;
+  }
+
+  private considerFogMIRV(): boolean {
+    if (
+      this.game.config().isUnitDisabled(UnitType.MIRV) ||
+      this.player.units(UnitType.MissileSilo).length === 0 ||
+      this.player.gold() < this.cost(UnitType.MIRV)
+    )
+      return false;
+    const targets = knownPlayers(this.game, this.player).filter(
+      (p) =>
+        p !== this.player &&
+        p.type() !== PlayerType.Bot &&
+        !this.player.isFriendly(p),
+    );
+    const threat =
+      this.game.numLandTiles() * this.victoryDenialThresholdPercent;
+    const incoming = new Set(
+      this.player.incomingAttacks().map((a) => a.attacker()),
+    );
+    for (const p of targets.sort(
+      (a, b) => b.numTilesOwned() - a.numTilesOwned(),
+    )) {
+      if (this.wasRecentlyMirved(p)) continue;
+      const observedInbound = p
+        .units(UnitType.MIRV)
+        .some((u) => canSeeUnit(this.game, this.player, u));
+      if (
+        !incoming.has(p) &&
+        !observedInbound &&
+        p.numTilesOwned() * 100 < threat
+      )
+        continue;
+      const visible = [...p.borderTiles()].filter((t) =>
+        canSeeTile(this.game, this.player, t),
+      );
+      const tile = visible.find(
+        (t) => this.player.canBuild(UnitType.MIRV, t) !== false,
+      );
+      if (tile === undefined) continue;
+      this.game.addExecution(new MirvExecution(this.player, tile));
+      this.recordMirvHit(p);
+      this.emojiBehavior.maybeSendAttackEmoji(p);
+      return true;
+    }
     return false;
   }
 
@@ -255,12 +303,15 @@ export class NationMIRVBehavior {
 
   // MIRV Cooldown Methods
   private wasRecentlyMirved(target: Player): boolean {
+    if (this.game.config().fogOfWar())
+      return this.player.units(UnitType.MIRV).length > 0;
     const lastTick = this.game.nationMirvTargets().get(target.id());
     if (lastTick === undefined) return false;
     return this.game.ticks() - lastTick < MIRV_COOLDOWN_TICKS;
   }
 
   private recordMirvHit(target: Player): void {
+    if (this.game.config().fogOfWar()) return;
     this.game.nationMirvTargets().set(target.id(), this.game.ticks());
   }
 

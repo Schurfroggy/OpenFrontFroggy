@@ -1,3 +1,4 @@
+import { normalizeSpecialModes } from "../core/game/SpecialModes";
 import { GameConfig } from "../core/Schemas";
 
 // The host edits its lobby through update_game_config, which carries a
@@ -26,6 +27,7 @@ const COPIED_KEYS = [
   "playerTeams",
   "allowedPublicIds",
   "trusted",
+  "fogOfWar",
   "doomsdayClock",
   "overtime",
   "anonymizeNames",
@@ -88,6 +90,7 @@ export function applyGameConfigPatch(
   // (the full config it sends has hostCheats: undefined when the toggle is
   // off), so `undefined` here means "clear", not "leave unchanged".
   target.hostCheats = patch.hostCheats;
+  Object.assign(target, normalizeSpecialModes(target));
 }
 
 // Whether the host-only cheat block actually grants anything: mere presence

@@ -38,6 +38,8 @@ export class MapViewSelector extends LitElement implements Controller {
   @state()
   private isVisible = false;
 
+  public fogOfWar = false;
+
   public eventBus: EventBus | null = null;
 
   createRenderRoot() {
@@ -74,7 +76,7 @@ export class MapViewSelector extends LitElement implements Controller {
         role="radiogroup"
         aria-label=${translateText("map_view.title")}
       >
-        ${VIEW_OPTIONS.map(
+        ${VIEW_OPTIONS.filter(opt => !this.fogOfWar || opt.mode !== "war").map(
           (opt) => html`
             <div class="view-button-wrap">
               <button

@@ -11,6 +11,7 @@ import { ReplaySpeedMultiplier } from "./utilities/ReplaySpeedMultiplier";
 import { GameView, UnitView } from "./view";
 
 export class MouseUpEvent implements GameEvent {
+  public handled = false;
   constructor(
     public readonly x: number,
     public readonly y: number,
@@ -95,6 +96,7 @@ export class MapViewModeEvent implements GameEvent {
 }
 
 export class CloseViewEvent implements GameEvent {}
+export class StartExpeditionEvent implements GameEvent {}
 
 export class RefreshGraphicsEvent implements GameEvent {}
 
@@ -395,6 +397,11 @@ export class InputHandler {
       },
       (e: KeyboardEvent) => !e.repeat,
     );
+    if (this.keybinds.dispatchExpedition)
+      this.addKeybindAndEvent(this.keybinds.dispatchExpedition, () => {
+        if (this.gameView.config().fogOfWar())
+          this.eventBus.emit(new StartExpeditionEvent());
+      });
     this.addKeybindAndEvent(this.keybinds.attackRatioDown, () => {
       const increment = this.userSettings.attackRatioIncrement();
       this.eventBus.emit(new AttackRatioEvent(-increment));
@@ -690,7 +697,7 @@ export class InputHandler {
 
         if (e.code === "Escape") {
           e.preventDefault();
-          let closedUI = false;
+          let closedUI = !!this.uiState.expeditionSelecting;
 
           if (this.uiState.ghostStructure !== null) {
             this.setGhostStructure(null);
@@ -980,7 +987,9 @@ export class InputHandler {
           event.preventDefault();
           return;
         }
-        this.eventBus.emit(new TouchEvent(event.x, event.y));
+        if (this.uiState.expeditionSelecting)
+          this.eventBus.emit(new MouseUpEvent(event.x, event.y));
+        else this.eventBus.emit(new TouchEvent(event.x, event.y));
         event.preventDefault();
         return;
       }
@@ -989,6 +998,7 @@ export class InputHandler {
         !this.userSettings.leftClickOpensMenu() ||
         event.shiftKey ||
         this.gameView.inSpawnPhase() || // No Radial Menu during spawn phase, only spawn point selection
+        this.uiState.expeditionSelecting ||
         this.uiState.ghostStructure !== null // Block radial menu on left click if building
       ) {
         this.eventBus.emit(new MouseUpEvent(event.x, event.y));
@@ -1132,6 +1142,10 @@ export class InputHandler {
 
   private onContextMenu(event: MouseEvent) {
     event.preventDefault();
+    if (this.uiState.expeditionSelecting) {
+      this.eventBus.emit(new CloseViewEvent());
+      return;
+    }
     if (this.gameView.inSpawnPhase()) {
       return;
     }

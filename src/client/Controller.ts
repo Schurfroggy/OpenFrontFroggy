@@ -11,6 +11,8 @@
  * draws to a shared canvas, so they're plain controllers.
  */
 export interface Controller {
+  /** Release listeners and DOM owned by this game. */
+  dispose?: () => void;
   /** Called once at game start. Subscribe to events / set up state here. */
   init?: () => void;
 

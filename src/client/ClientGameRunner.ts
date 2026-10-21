@@ -54,9 +54,9 @@ import {
   TickMetricsEvent,
   ToggleRenderDebugGuiEvent,
 } from "./InputHandler";
+import { NATION_NAMES_EVENT } from "./NationNames";
 import { pagePin } from "./PagePin";
 import { groupTokenOf, loggableStartMessage } from "./PresenceGroup";
-import { NATION_NAMES_EVENT } from "./NationNames";
 import { versionedPathForMismatchedGame } from "./ServerList";
 import { reportGameError } from "./Telemetry";
 import { terrainMapFileLoader } from "./TerrainMapFileLoader";
@@ -895,6 +895,7 @@ async function createClientGame(
       if (rendererDisposed) return;
       rendererDisposed = true;
       stopFrameLoop();
+      gameRenderer.dispose?.();
       view.dispose();
       glCanvas.remove();
       inputOverlay.remove();
@@ -1228,7 +1229,12 @@ export class ClientGameRunner {
   }
 
   private inputEvent(event: MouseUpEvent) {
-    if (!this.isActive || this.renderer.uiState.ghostStructure !== null) {
+    if (
+      event.handled ||
+      !this.isActive ||
+      this.renderer.uiState.ghostStructure !== null ||
+      this.renderer.uiState.expeditionSelecting
+    ) {
       return;
     }
     const cell = this.renderer.transformHandler.screenToWorldCoordinates(
@@ -1240,6 +1246,7 @@ export class ClientGameRunner {
     }
     console.log(`clicked cell ${cell}`);
     const tile = this.gameView.ref(cell.x, cell.y);
+    if (!this.gameView.isTileVisible(tile)) return;
     if (
       this.gameView.isLand(tile) &&
       !this.gameView.hasOwner(tile) &&

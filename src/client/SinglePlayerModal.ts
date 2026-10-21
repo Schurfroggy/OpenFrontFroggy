@@ -210,6 +210,7 @@ export class SinglePlayerModal extends BaseModal {
   @state() private customAlliances: boolean = DEFAULT_OPTIONS.customAlliances;
   @state() private customAllianceMinutes: number | undefined =
     DEFAULT_OPTIONS.customAllianceMinutes;
+  @state() private fogOfWar = false;
   @state() private waterNukes: boolean = DEFAULT_OPTIONS.waterNukes;
   @state() private doomsdayClock: boolean = DEFAULT_OPTIONS.doomsdayClock;
   @state() private doomsdayClockSpeed: DoomsdayClockSpeed =
@@ -480,6 +481,7 @@ export class SinglePlayerModal extends BaseModal {
         .onKeyDown=${this.handleCustomAllianceMinutesKeyDown}
       ></toggle-input-card>`,
       html`<toggle-input-card
+        ?hidden=${this.fogOfWar}
         .labelKey=${"game_settings.overtime"}
         .checked=${this.overtime}
         .inputMin=${1}
@@ -564,11 +566,17 @@ export class SinglePlayerModal extends BaseModal {
                     checked: this.compactMap,
                   },
                   {
+                    labelKey: "game_settings.fog_of_war",
+                    checked: this.fogOfWar,
+                  },
+                  {
                     labelKey: "game_settings.water_nukes",
+                    hidden: this.fogOfWar,
                     checked: this.waterNukes,
                   },
                   {
                     labelKey: "game_settings.doomsday_clock",
+                    hidden: this.fogOfWar,
                     checked: this.doomsdayClock,
                     doomsdayClockSpeed: this.doomsdayClockSpeed,
                   },
@@ -637,6 +645,7 @@ export class SinglePlayerModal extends BaseModal {
       this.startingGold !== DEFAULT_OPTIONS.startingGold ||
       this.customAlliances !== DEFAULT_OPTIONS.customAlliances ||
       this.customAllianceMinutes !== DEFAULT_OPTIONS.customAllianceMinutes ||
+      this.fogOfWar ||
       this.waterNukes !== DEFAULT_OPTIONS.waterNukes ||
       this.doomsdayClock !== DEFAULT_OPTIONS.doomsdayClock ||
       // Pace only matters when the mode is on (startGame drops it when off).
@@ -715,6 +724,7 @@ export class SinglePlayerModal extends BaseModal {
     this.startingGoldValue = DEFAULT_OPTIONS.startingGoldValue;
     this.customAlliances = DEFAULT_OPTIONS.customAlliances;
     this.customAllianceMinutes = DEFAULT_OPTIONS.customAllianceMinutes;
+    this.fogOfWar = false;
     this.waterNukes = DEFAULT_OPTIONS.waterNukes;
     this.doomsdayClock = DEFAULT_OPTIONS.doomsdayClock;
     this.doomsdayClockSpeed = DEFAULT_OPTIONS.doomsdayClockSpeed;
@@ -828,6 +838,7 @@ export class SinglePlayerModal extends BaseModal {
     this.startingGoldValue = DEFAULT_OPTIONS.startingGoldValue;
     this.customAlliances = DEFAULT_OPTIONS.customAlliances;
     this.customAllianceMinutes = DEFAULT_OPTIONS.customAllianceMinutes;
+    this.fogOfWar = false;
     this.waterNukes = DEFAULT_OPTIONS.waterNukes;
     this.doomsdayClock = DEFAULT_OPTIONS.doomsdayClock;
     this.doomsdayClockSpeed = DEFAULT_OPTIONS.doomsdayClockSpeed;
@@ -868,10 +879,20 @@ export class SinglePlayerModal extends BaseModal {
       case "game_settings.compact_map":
         this.handleCompactMapChange(checked);
         break;
+      case "game_settings.fog_of_war":
+        this.fogOfWar = checked;
+        if (checked) {
+          this.waterNukes = false;
+          this.doomsdayClock = false;
+          this.overtime = false;
+        }
+        break;
       case "game_settings.water_nukes":
+        if (this.fogOfWar) break;
         this.waterNukes = checked;
         break;
       case "game_settings.doomsday_clock":
+        if (this.fogOfWar) break;
         this.doomsdayClock = checked;
         break;
       default:
@@ -943,7 +964,7 @@ export class SinglePlayerModal extends BaseModal {
     checked: boolean,
     value: number | string | undefined,
   ) => {
-    this.overtime = checked;
+    this.overtime = checked && !this.fogOfWar;
     this.overtimeStartMinutes = toOptionalNumber(value);
   };
 
@@ -1261,6 +1282,9 @@ export class SinglePlayerModal extends BaseModal {
                 ...(this.customAlliances
                   ? { customAllianceDuration: this.customAllianceMinutes ?? 0 }
                   : {}),
+                fogOfWar: {
+                  enabled: this.fogOfWar,
+                },
                 ...(this.waterNukes ? { waterNukes: true } : {}),
                 ...(this.doomsdayClock
                   ? {

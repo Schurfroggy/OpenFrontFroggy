@@ -1,3 +1,4 @@
+import { fogAllowsIntent } from "../game/FogOfWar";
 import { Execution, Game } from "../game/Game";
 import { PseudoRandom } from "../PseudoRandom";
 import { ClientID, GameID, StampedIntent, Turn } from "../Schemas";
@@ -16,6 +17,7 @@ import { DonateTroopsExecution } from "./DonateTroopExecution";
 import { EmbargoAllExecution } from "./EmbargoAllExecution";
 import { EmbargoExecution } from "./EmbargoExecution";
 import { EmojiExecution } from "./EmojiExecution";
+import { ExpeditionShipExecution } from "./ExpeditionShipExecution";
 import { MarkDisconnectedExecution } from "./MarkDisconnectedExecution";
 import { MoveWarshipExecution } from "./MoveWarshipExecution";
 import { NationExecution } from "./NationExecution";
@@ -45,6 +47,10 @@ export class Executor {
     this.random = new PseudoRandom(simpleHash(gameID_) + 1);
   }
 
+  localClientID(): ClientID | undefined {
+    return this.clientID;
+  }
+
   gameID(): GameID {
     return this.gameID_;
   }
@@ -59,6 +65,8 @@ export class Executor {
       console.warn(`player with clientID ${intent.clientID} not found`);
       return new NoOpExecution();
     }
+
+    if (!fogAllowsIntent(this.mg, player, intent)) return new NoOpExecution();
 
     // create execution
     switch (intent.type) {
@@ -109,6 +117,8 @@ export class Executor {
         return new EmbargoExecution(player, intent.targetID, intent.action);
       case "embargo_all":
         return new EmbargoAllExecution(player, intent.action);
+      case "expedition":
+        return new ExpeditionShipExecution(player, intent.target);
       case "build_unit":
         return new ConstructionExecution(
           player,

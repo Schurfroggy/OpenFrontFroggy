@@ -19,7 +19,7 @@ export class PlayerStats extends StatsTable {
 
     return game
       .playerViews()
-      .filter((player) => player.isAlive())
+      .filter((player) => player.isAlive() && game.canViewPlayer(player))
       .map((player) => ({
         key: player.id(),
         name: player.name(),

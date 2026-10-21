@@ -74,6 +74,7 @@ import {
   RailNetworkImpl,
   RailNetworkSnapshot,
 } from "./RailNetworkImpl";
+import { NUCLEAR_FOG_REVEAL_TICKS } from "./SpecialModes";
 import { Stats } from "./Stats";
 import { StatsImpl, StatsSnapshot } from "./StatsImpl";
 import { assignTeams, resolveTeamsList } from "./TeamAssignment";
@@ -104,6 +105,7 @@ export function createGame(
 export type CellString = string;
 
 export class GameImpl implements Game {
+  private _nuclearFogSources = new Map<TileRef, Tick>();
   private _ticks = 0;
   private startTick: number | null = null;
 
@@ -309,6 +311,18 @@ export class GameImpl implements Game {
       return;
     }
     this._waterManager.queueTile(tile);
+  }
+
+  nuclearFogSources(): ReadonlyMap<TileRef, Tick> {
+    return this._nuclearFogSources;
+  }
+
+  revealNuclearFog(tiles: Iterable<TileRef>): void {
+    if (!this._config.fogOfWar()) return;
+    const expires = this._ticks + NUCLEAR_FOG_REVEAL_TICKS;
+    for (const tile of tiles) {
+      if (this.hasFallout(tile)) this._nuclearFogSources.set(tile, expires);
+    }
   }
 
   queueNukeImpact(tile: TileRef): void {
@@ -532,6 +546,9 @@ export class GameImpl implements Game {
   }
 
   executeNextTick(): GameUpdates {
+    for (const [tile, expiry] of this._nuclearFogSources) {
+      if (expiry <= this._ticks) this._nuclearFogSources.delete(tile);
+    }
     this.updates = createGameUpdatesMap();
     this.tileUpdatePairs.length = 0;
     this.execs.forEach((e) => {
@@ -805,6 +822,7 @@ export class GameImpl implements Game {
   }
 
   conquer(owner: PlayerImpl, tile: TileRef): void {
+    this._nuclearFogSources.delete(tile);
     if (!this.isLand(tile)) {
       throw Error(`cannot conquer water`);
     }
@@ -1445,6 +1463,7 @@ export class GameImpl implements Game {
     const execs = this.execs.map((e) => w.exec(e));
     const unInitExecs = this.unInitExecs.map((e) => w.exec(e));
     return {
+      nuclearFogSources: [...this._nuclearFogSources],
       ticks: this._ticks,
       startTick: this.startTick,
       humans: this._humans.map(playerInfoData),
@@ -1497,6 +1516,7 @@ export class GameImpl implements Game {
    * every player, unit and execution has been restored.
    */
   restoreState(s: GameState, r: SnapshotReader): void {
+    this._nuclearFogSources = new Map(s.nuclearFogSources);
     this._ticks = s.ticks;
     this.startTick = s.startTick;
     this.execs = s.execs.map((i) => r.exec(i));
@@ -1631,8 +1651,10 @@ export class GameImpl implements Game {
 
 export const GameSnapshot = snapshotType({
   name: "Game",
-  version: 1,
+  version: 2,
+  migrations: { 1: (old) => ({ ...old, nuclearFogSources: [] }) },
   schema: z.object({
+    nuclearFogSources: z.array(z.tuple([zInt(), zInt()])),
     ticks: zInt(),
     startTick: zInt().nullable(),
     humans: z.array(PlayerInfoSchema),

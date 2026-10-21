@@ -710,6 +710,7 @@ export function getMessageTypeClasses(type: MessageType): string {
       return severityColors["fail"];
     case MessageType.ATTACK_CANCELLED:
     case MessageType.ATTACK_REQUEST:
+    case MessageType.EXPLORATION:
     case MessageType.DONATION_SENT:
     case MessageType.DONATION_RECEIVED:
       return severityColors["blue"];

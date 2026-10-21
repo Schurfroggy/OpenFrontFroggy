@@ -28,6 +28,13 @@ export type PlayerID = string;
 export type Tick = number;
 export type Gold = bigint;
 
+export type ExpeditionState = {
+  phase: "sailing" | "surveying" | "exploring" | "stranded";
+  originPort: number;
+  destination: TileRef;
+  waitUntil: number;
+};
+
 export type WarshipState = {
   state: "patrolling" | "retreating" | "docked";
   patrolTile?: TileRef;
@@ -209,6 +216,7 @@ export enum UnitType {
   MIRVWarhead = "MIRV Warhead",
   Train = "Train",
   Factory = "Factory",
+  ExpeditionShip = "Expedition Ship",
 }
 
 export enum TrainType {
@@ -247,6 +255,7 @@ export const BuildMenus = unitTypeGroup([
 
 export const PlayerBuildable = unitTypeGroup([
   ...BuildMenus.types,
+  UnitType.ExpeditionShip,
   UnitType.TransportShip,
 ] as const);
 
@@ -261,6 +270,7 @@ export type TrajectoryTile = {
   targetable: boolean;
 };
 export interface UnitParamsMap {
+  [UnitType.ExpeditionShip]: { expeditionState: ExpeditionState };
   [UnitType.TransportShip]: {
     troops?: number;
     targetTile?: TileRef;
@@ -524,6 +534,8 @@ export interface Unit {
 
   // Health
   hasHealth(): boolean;
+  expeditionState(): ExpeditionState | undefined;
+  updateExpeditionState(state: ExpeditionState): void;
   warshipState(): WarshipState;
   updateWarshipState(update: Partial<WarshipState>): void;
   transportShipState(): TransportShipState;
@@ -953,6 +965,8 @@ export interface Game extends GameMap {
   queueWaterConversion(tile: TileRef): void;
 
   /** Queue a tile that was inside a nuke blast radius (for nukeable layer destruction). */
+  nuclearFogSources(): ReadonlyMap<TileRef, Tick>;
+  revealNuclearFog(tiles: Iterable<TileRef>): void;
   queueNukeImpact(tile: TileRef): void;
 
   /** Drain all tiles from nuke impacts this tick. Called once per tick. */
@@ -1069,6 +1083,7 @@ export enum MessageType {
   DONATION_RECEIVED,
   CHAT,
   RENEW_ALLIANCE,
+  EXPLORATION,
 }
 
 // Message categories used for filtering events in the EventsDisplay
@@ -1104,6 +1119,7 @@ export const MESSAGE_TYPE_CATEGORIES: Record<MessageType, MessageCategory> = {
   [MessageType.DONATION_SENT]: MessageCategory.TRADE,
   [MessageType.DONATION_RECEIVED]: MessageCategory.TRADE,
   [MessageType.CHAT]: MessageCategory.CHAT,
+  [MessageType.EXPLORATION]: MessageCategory.TRADE,
 } as const;
 
 /**

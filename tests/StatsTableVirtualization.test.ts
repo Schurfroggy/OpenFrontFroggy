@@ -24,6 +24,7 @@ function player(id: string, tiles: number): PlayerView {
 
 function gameWith(players: PlayerView[], me: PlayerView | null): GameView {
   return {
+    canViewPlayer: () => true,
     myPlayer: () => me,
     playerViews: () => players,
     config: () => ({ maxTroops: () => 100 }),

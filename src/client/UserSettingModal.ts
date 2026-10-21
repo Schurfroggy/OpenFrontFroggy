@@ -1355,6 +1355,16 @@ export class UserSettingModal extends BaseModal {
       ></setting-keybind>
 
       <setting-keybind
+        action="dispatchExpedition"
+        label=${translateText("expedition.name")}
+        description=${translateText("expedition.description")}
+        defaultKey=${this.defaultKeybinds.dispatchExpedition}
+        .value=${this.getKeyValue("dispatchExpedition")}
+        .display=${this.getKeyChar("dispatchExpedition")}
+        @change=${this.handleKeybindChange}
+      ></setting-keybind>
+
+      <setting-keybind
         action="buildMIRV"
         label=${translateText("user_setting.build_mirv")}
         description=${translateText("user_setting.build_mirv_desc")}

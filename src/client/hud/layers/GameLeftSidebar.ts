@@ -45,6 +45,7 @@ export class GameLeftSidebar extends LitElement implements Controller {
   @query("player-stats") private playerStats?: PlayerStats;
   @query("team-stats") private teamStats?: TeamStats;
   private showPlayerStatsAfterSpawn = false;
+  private lastStatsTick = -1;
 
   createRenderRoot() {
     return this;
@@ -68,7 +69,7 @@ export class GameLeftSidebar extends LitElement implements Controller {
   }
 
   getTickIntervalMs() {
-    return 1000;
+    return this.game?.config().gameConfig().fogOfWar?.enabled ? 0 : 1000;
   }
 
   tick() {
@@ -89,6 +90,11 @@ export class GameLeftSidebar extends LitElement implements Controller {
       this.isPlayerTeamLabelVisible = false;
     }
 
+    if (this.game.config().gameConfig().fogOfWar?.enabled) {
+      const tick = this.game.ticks();
+      if (tick === this.lastStatsTick) return;
+      this.lastStatsTick = tick;
+    }
     this.playerStats?.refresh();
     this.teamStats?.refresh();
   }

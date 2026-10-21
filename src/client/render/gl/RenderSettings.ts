@@ -45,6 +45,15 @@ export interface ThemeSettings {
 }
 
 export interface RenderSettings {
+  fogOfWar: {
+    brightnessExponent: number;
+    color: number[];
+    transitionMs: number;
+    cloudColor: number[];
+    cloudStrength: number;
+    cloudScale: number;
+    cloudSpeed: number;
+  };
   theme: ThemeSettings;
   passEnabled: {
     terrain: boolean;

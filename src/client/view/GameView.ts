@@ -106,6 +106,43 @@ export class GameView implements GameMap {
   private _firstPopulate = true;
 
   private _myPlayer: PlayerView | null = null;
+  private fogBrightness: Uint8Array | null = null;
+  private spawnFogBrightness: Uint8Array | null = null;
+  private fogCountries = new Set<number>();
+
+  private renderFogBrightness(): Uint8Array | null {
+    if (this.fogBrightness) return this.fogBrightness;
+    if (
+      !this._config.fogOfWar() ||
+      !this._myClientID ||
+      !this.inSpawnPhase() ||
+      this._config.isReplay()
+    ) {
+      return null;
+    }
+    // Presentation only: selecting a spawn must still allow the whole map.
+    return (this.spawnFogBrightness ??= new Uint8Array(
+      this.width() * this.height(),
+    ).fill(5));
+  }
+
+  isTileVisible(tile: TileRef): boolean {
+    return !this.fogBrightness || (this.fogBrightness[tile] ?? 0) > 0;
+  }
+
+  canViewPlayer(player: PlayerView): boolean {
+    if (this.fogBrightness) return this.fogCountries.has(player.smallID());
+    // An absent/late field must not turn a living player's fog game omniscient.
+    const me = this.myPlayer();
+    if (this._config.fogOfWar() && !this._config.isReplay() && me?.isAlive()) {
+      return player === me || player.isFriendly(me);
+    }
+    return true;
+  }
+
+  isUnitVisible(unit: UnitView): boolean {
+    return unit.owner() === this.myPlayer() || this.isTileVisible(unit.tile());
+  }
 
   // ── populateFrame dirty flags ──────────────────────────────────────────
   // The derived structures below only depend on rarely-changing player
@@ -178,6 +215,7 @@ export class GameView implements GameMap {
     this._frame = {
       tick: 0,
       inSpawnPhase: true,
+      fogBrightness: this.renderFogBrightness(),
       tileState: this._map.tileStateBuffer(),
       trailState: this.trailManager.getTrailState(),
       spiralRibbons: this.spiralTrails.getRibbons(),
@@ -455,6 +493,25 @@ export class GameView implements GameMap {
    * complete. Mutates _frame fields in place; never reassigns them.
    */
   private populateFrame(gu: GameUpdateViewData): void {
+    const hadFog = this.fogBrightness !== null;
+    if (gu.fogBrightness !== undefined) this.fogBrightness = gu.fogBrightness;
+    else if (!this._config.fogOfWar()) this.fogBrightness = null;
+    this.fogCountries.clear();
+    if (this.fogBrightness) {
+      for (let tile = 0; tile < this.fogBrightness.length; tile++) {
+        if (this.fogBrightness[tile] === 0) continue;
+        const owner = this.owner(tile);
+        if (owner.isPlayer()) this.fogCountries.add(owner.smallID());
+      }
+      const me = this.myPlayer();
+      if (me) {
+        this.fogCountries.add(me.smallID());
+        for (const p of this.players()) {
+          if (p.isFriendly(me)) this.fogCountries.add(p.smallID());
+        }
+      }
+    }
+
     // Reset trail dirty markers for this tick. The trailManager.update() pass
     // below repaints rows and re-sets these as it goes.
     this.trailManager.clearDirtyRows();
@@ -576,6 +633,49 @@ export class GameView implements GameMap {
       // Live reference to this tick's changed refs — consumers copy what
       // they keep (TerritoryPass buckets them synchronously in the upload).
       f.changedTiles = this.updatedTiles;
+    }
+
+    f.fogBrightness = this.renderFogBrightness();
+    f.units = this.fogBrightness
+      ? new Map(
+          [...this._unitStates].filter(
+            ([, u]) =>
+              this.isTileVisible(u.pos) ||
+              u.ownerID === this._myPlayer?.smallID(),
+          ),
+        )
+      : this._unitStates;
+    f.names = this.fogBrightness
+      ? new Map(
+          [...this._names].filter(([, name]) =>
+            this.isTileVisible(
+              this.ref(Math.floor(name.x), Math.floor(name.y)),
+            ),
+          ),
+        )
+      : this._names;
+    if (this.fogBrightness || hadFog) f.structuresDirty = true;
+    if (this.fogBrightness) {
+      f.nukeTelegraphs = f.nukeTelegraphs.filter((n) =>
+        this.isTileVisible(this.ref(Math.floor(n.x), Math.floor(n.y))),
+      );
+      f.events.deadUnits.splice(
+        0,
+        f.events.deadUnits.length,
+        ...f.events.deadUnits.filter((u) => this.isTileVisible(u.pos)),
+      );
+      f.events.conquestEvents.splice(
+        0,
+        f.events.conquestEvents.length,
+        ...f.events.conquestEvents.filter((e) =>
+          this.isTileVisible(this.ref(Math.floor(e.x), Math.floor(e.y))),
+        ),
+      );
+      f.events.bonusEvents.splice(
+        0,
+        f.events.bonusEvents.length,
+        ...f.events.bonusEvents.filter((e) => this.isTileVisible(e.tile)),
+      );
     }
 
     // Reset transient flags for next tick.

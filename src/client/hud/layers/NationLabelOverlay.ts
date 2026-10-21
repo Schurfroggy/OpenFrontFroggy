@@ -125,6 +125,8 @@ export class NationLabelOverlay extends LitElement {
       if (translated === null) continue;
       const data = player.nameData;
       if (data === undefined || data.size <= 0) continue;
+      if (!game.isTileVisible(game.ref(Math.floor(data.x), Math.floor(data.y))))
+        continue;
 
       const screen = transform.worldToScreenCoordinates(
         new Cell(data.x, data.y),

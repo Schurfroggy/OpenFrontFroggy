@@ -19,6 +19,7 @@ import {
   UnitInfo,
   UnitType,
 } from "../game/Game";
+import { normalizeSpecialModes } from "../game/SpecialModes";
 import { UserSettings } from "../game/UserSettings";
 import { GameConfig, TeamCountConfig } from "../Schemas";
 import { NukeType } from "../StatsSchemas";
@@ -276,7 +277,13 @@ export class Config {
     private _isReplay: boolean,
     public readonly listed: boolean = false,
     private _spectator: boolean = false,
-  ) {}
+  ) {
+    this._gameConfig = normalizeSpecialModes(_gameConfig);
+  }
+
+  fogOfWar(): boolean {
+    return this._gameConfig.fogOfWar?.enabled === true;
+  }
 
   isReplay(): boolean {
     return this._isReplay;
@@ -398,7 +405,10 @@ export class Config {
   }
 
   isUnitDisabled(unitType: UnitType): boolean {
-    return this._gameConfig.disabledUnits?.includes(unitType) ?? false;
+    return (
+      (unitType === UnitType.ExpeditionShip && !this.fogOfWar()) ||
+      (this._gameConfig.disabledUnits?.includes(unitType) ?? false)
+    );
   }
 
   bots(): number {
@@ -575,6 +585,23 @@ export class Config {
       case UnitType.TransportShip:
         info = {
           cost: () => 0n,
+        };
+        break;
+      case UnitType.ExpeditionShip:
+        info = {
+          cost: (_game, player, extraUnits = 0) => {
+            if (
+              player.type() === PlayerType.Human &&
+              this.hasInfiniteGoldFor(player)
+            )
+              return 0n;
+            return player.unitsConstructed(UnitType.ExpeditionShip) +
+              extraUnits <
+              5
+              ? 150_000n
+              : 300_000n;
+          },
+          maxHealth: 250,
         };
         break;
       case UnitType.Warship:

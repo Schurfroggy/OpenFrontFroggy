@@ -25,7 +25,11 @@ function makeOverlay(players: unknown[]): NationLabelOverlay {
     "nation-label-overlay",
   ) as NationLabelOverlay;
   document.body.appendChild(overlay);
-  overlay.game = { players: () => players } as never;
+  overlay.game = {
+    isTileVisible: () => true,
+    ref: () => 0,
+    players: () => players,
+  } as never;
   overlay.transform = {
     scale: 10,
     worldToScreenCoordinates: () => ({ x: 100, y: 200 }),
@@ -74,7 +78,11 @@ describe("nation-label-overlay", () => {
   it("tells the two Georgias apart by their flag", () => {
     setNationNamesEnabled(true);
     const overlay = makeOverlay([
-      player({ id: () => "us-ga", static: { displayName: "Georgia" }, nationFlag: "Georgia_US" }),
+      player({
+        id: () => "us-ga",
+        static: { displayName: "Georgia" },
+        nationFlag: "Georgia_US",
+      }),
     ]);
     repaint();
     expect(overlay.querySelector("div")?.textContent).toBe("佐治亚");

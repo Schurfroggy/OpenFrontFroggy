@@ -10,7 +10,7 @@ import {
 } from "../../../core/game/Game";
 import { UserSettings } from "../../../core/game/UserSettings";
 import { Controller } from "../../Controller";
-import { ToggleStructureEvent } from "../../InputHandler";
+import { StartExpeditionEvent, ToggleStructureEvent } from "../../InputHandler";
 import { UIState } from "../../UIState";
 import { renderNumber, translateText } from "../../Utils";
 import { GameView } from "../../view";
@@ -18,6 +18,7 @@ import {
   atomBombIcon,
   cityIcon,
   defensePostIcon,
+  expeditionIcon,
   factoryIcon,
   goldCoinIcon,
   hydrogenBombIcon,
@@ -38,6 +39,7 @@ export class UnitDisplay extends LitElement implements Controller {
   private keybinds: Record<string, { value: string; key: string }> = {};
   private _cities = 0;
   private _warships = 0;
+  private _expeditions = 0;
   private _factories = 0;
   private _missileSilo = 0;
   private _port = 0;
@@ -57,7 +59,9 @@ export class UnitDisplay extends LitElement implements Controller {
 
     this.keybinds = userSettings.parsedUserKeybinds();
 
-    this.allDisabled = BuildMenus.types.every((u) => config.isUnitDisabled(u));
+    this.allDisabled = this.buildableTypes().every((u) =>
+      config.isUnitDisabled(u),
+    );
 
     const highlightUnits: Partial<
       Record<TutorialHighlight, PlayerBuildableUnitType>
@@ -80,6 +84,12 @@ export class UnitDisplay extends LitElement implements Controller {
     this.requestUpdate();
   }
 
+  private buildableTypes(): PlayerBuildableUnitType[] {
+    return this.game.config().fogOfWar()
+      ? [...BuildMenus.types, UnitType.ExpeditionShip]
+      : [...BuildMenus.types];
+  }
+
   private cost(item: UnitType): Gold {
     for (const bu of this.playerBuildables ?? []) {
       if (bu.type === item) {
@@ -100,6 +110,20 @@ export class UnitDisplay extends LitElement implements Controller {
           this.cost(item) <= (player?.gold() ?? 0n) &&
           (player?.units(UnitType.MissileSilo).length ?? 0) > 0
         );
+      case UnitType.ExpeditionShip:
+        return (
+          this.playerBuildables !== null &&
+          this.cost(item) <= (player?.gold() ?? 0n) &&
+          (player
+            ?.units(UnitType.Port)
+            .some(
+              (p) =>
+                p.isActive() &&
+                !p.isUnderConstruction() &&
+                !p.markedForDeletion(),
+            ) ??
+            false)
+        );
       case UnitType.Warship:
         return (
           this.cost(item) <= (player?.gold() ?? 0n) &&
@@ -113,8 +137,9 @@ export class UnitDisplay extends LitElement implements Controller {
   tick() {
     const player = this.game?.myPlayer();
     if (!player) return;
-    player.buildables(undefined, BuildMenus.types).then((buildables) => {
+    player.buildables(undefined, this.buildableTypes()).then((buildables) => {
       this.playerBuildables = buildables;
+      this.requestUpdate();
     });
     this._cities = player.totalUnitLevels(UnitType.City);
     this._missileSilo = player.totalUnitLevels(UnitType.MissileSilo);
@@ -123,6 +148,7 @@ export class UnitDisplay extends LitElement implements Controller {
     this._samLauncher = player.totalUnitLevels(UnitType.SAMLauncher);
     this._factories = player.totalUnitLevels(UnitType.Factory);
     this._warships = player.totalUnitLevels(UnitType.Warship);
+    this._expeditions = player.units(UnitType.ExpeditionShip).length;
     this.requestUpdate();
   }
 
@@ -213,6 +239,15 @@ export class UnitDisplay extends LitElement implements Controller {
             "mirv",
             this.keybinds["buildMIRV"]?.key ?? "0",
           )}
+          ${this.game.config().fogOfWar()
+            ? this.renderUnitItem(
+                expeditionIcon,
+                this._expeditions,
+                UnitType.ExpeditionShip,
+                "expedition_ship",
+                this.keybinds["dispatchExpedition"]?.key ?? "N",
+              )
+            : null}
         </div>
       </div>
     `;
@@ -228,7 +263,10 @@ export class UnitDisplay extends LitElement implements Controller {
     if (this.game.config().isUnitDisabled(unitType)) {
       return html``;
     }
-    const selected = this.uiState.ghostStructure === unitType;
+    const selected =
+      unitType === UnitType.ExpeditionShip
+        ? this.uiState.expeditionSelecting
+        : this.uiState.ghostStructure === unitType;
     const hovered = this._hoveredUnit === unitType;
     const displayHotkey = hotkey
       .replace("Digit", "")
@@ -238,6 +276,7 @@ export class UnitDisplay extends LitElement implements Controller {
     return html`
       <div
         class="flex flex-col items-center relative"
+        data-unit-type=${unitType}
         @mouseenter=${() => {
           this._hoveredUnit = unitType;
           this.requestUpdate();
@@ -257,7 +296,11 @@ export class UnitDisplay extends LitElement implements Controller {
                     "unit_type." + structureKey,
                   )}${` [${displayHotkey}]`}
                 </div>
-                <div class="p-2">
+                <div
+                  class="p-2 ${unitType === UnitType.ExpeditionShip
+                    ? "max-w-72 whitespace-normal"
+                    : ""}"
+                >
                   ${translateText("build_menu.desc." + structureKey)}
                 </div>
                 ${unitType === UnitType.Warship
@@ -284,9 +327,14 @@ export class UnitDisplay extends LitElement implements Controller {
              rounded-sm text-white ${selected ? "bg-slate-400/20" : ""}
              ${this.tutorialHighlight === unitType ? "tutorial-highlight" : ""}"
           @click=${() => {
-            if (selected) {
+            if (unitType === UnitType.ExpeditionShip) {
+              if (selected || this.canBuild(unitType)) {
+                this.eventBus.emit(new StartExpeditionEvent());
+              }
+            } else if (selected) {
               this.uiState.ghostStructure = null;
             } else if (this.canBuild(unitType)) {
+              this.uiState.expeditionSelecting = false;
               this.uiState.ghostStructure = unitType;
             }
             this.requestUpdate();
@@ -303,6 +351,7 @@ export class UnitDisplay extends LitElement implements Controller {
                 );
                 break;
               case UnitType.Warship:
+              case UnitType.ExpeditionShip:
                 this.eventBus?.emit(new ToggleStructureEvent([UnitType.Port]));
                 break;
               default:

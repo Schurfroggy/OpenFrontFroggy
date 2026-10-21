@@ -102,6 +102,57 @@ describe("self-hosted featured preset rotation", () => {
   });
 });
 
+describe("self-hosted carousel interaction", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  function carousel() {
+    const selector = new GameModeSelector() as any;
+    selector.selfHostedPresets = randomSelfHostedPresets();
+    return selector;
+  }
+
+  it("wraps through the same five maps in both directions", () => {
+    const time = vi.spyOn(performance, "now").mockReturnValue(1000);
+    const selector = carousel();
+    const presets = selector.selfHostedPresets;
+    selector.changeSelfHostedPreset(-1);
+    expect(selector.selfHostedPresetIndex).toBe(4);
+    time.mockReturnValue(1500);
+    selector.changeSelfHostedPreset(1);
+    expect(selector.selfHostedPresetIndex).toBe(0);
+    expect(selector.selfHostedPresets).toBe(presets);
+  });
+
+  it("consumes a trackpad gesture once, including its momentum tail", () => {
+    let now = 1000;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+    const selector = carousel();
+    for (let i = 0; i < 20; i++) {
+      const event = new WheelEvent("wheel", { deltaY: 40, cancelable: true });
+      selector.onSelfHostedWheel(event);
+      expect(event.defaultPrevented).toBe(true);
+      now += 50;
+    }
+    expect(selector.selfHostedPresetIndex).toBe(1);
+    now += 200;
+    selector.onSelfHostedWheel(new WheelEvent("wheel", { deltaY: 40 }));
+    expect(selector.selfHostedPresetIndex).toBe(2);
+  });
+
+  it("preserves browser zoom and horizontal scrolling", () => {
+    const selector = carousel();
+    for (const options of [
+      { deltaY: 100, ctrlKey: true },
+      { deltaY: 10, deltaX: 100 },
+    ]) {
+      const event = new WheelEvent("wheel", { ...options, cancelable: true });
+      selector.onSelfHostedWheel(event);
+      expect(event.defaultPrevented).toBe(false);
+    }
+    expect(selector.selfHostedPresetIndex).toBe(0);
+  });
+});
+
 describe("GameModeSelector lobby-socket lifecycle", () => {
   beforeEach(() => {
     socketCalls.started = 0;

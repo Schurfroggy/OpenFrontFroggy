@@ -77,6 +77,7 @@ describe("createRenderer", () => {
       owner: () => ({}),
       myPlayer: () => ({}),
       config: () => ({
+        fogOfWar: () => false,
         gameConfig: () => ({}),
         isReplay: () => false,
       }),

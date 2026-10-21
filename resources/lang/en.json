@@ -1,4 +1,34 @@
 {
+  "expedition": {
+    "coast_discovered": "Expedition discovered a new coast.",
+    "name": "Expedition Ship",
+    "description": "Click a destination to launch from the nearest available port. Dashed line shows direction only. Vision 10; survey for 1 minute, then explore. Nearby countries share sight while surveying. No new orders or recall.",
+    "port": "Departure port",
+    "target": "Original destination",
+    "cost": "Gold cost",
+    "dispatch": "Dispatch",
+    "cancel": "Cancel",
+    "choose_port": "Choose a departure port on the map or below.",
+    "choose_target": "Click any map coordinate to explore toward it. Right-click or Esc to cancel.",
+    "choose_confirm": "Confirm this one-way expedition?",
+    "no_port": "Build a port first.",
+    "unavailable": "Cannot dispatch: check gold and available ports.",
+    "sailing": "Voyaging",
+    "surveying": "Surveying",
+    "exploring": "Exploring",
+    "stranded": "Holding position",
+    "remaining": "Survey time: {seconds}s",
+    "irrevocable": "Orders cannot be changed after departure.",
+    "arrived": "Expedition arrived. Surveying for 1 minute.",
+    "approached": "Expedition reached an accessible position near its objective. Surveying for 1 minute.",
+    "discovered": "Expedition discovered a new country.",
+    "stranded_notice": "Expedition cannot proceed and is holding position."
+  },
+  "player_flag": {
+    "choose": "Choose a flag",
+    "none": "No flag",
+    "no_results": "No matching flags."
+  },
   "account_modal": {
     "cancel_subscription": "Cancel",
     "cancel_subscription_confirm": "Cancel your subscription? You may lose access immediately.",
@@ -168,6 +198,7 @@
   },
   "build_menu": {
     "desc": {
+      "expedition_ship": "Click a destination to launch from the nearest available port. Dashed line shows direction only. Vision 10; survey for 1 minute, then explore. Nearby countries share sight while surveying. No new orders or recall.",
       "atom_bomb": "Small explosion",
       "city": "Increases max population",
       "defense_post": "Increases defenses of nearby borders",
@@ -925,6 +956,7 @@
     "disable_units": "Disable Units",
     "doomsday_clock": "Doomsday Clock",
     "enable_advanced_settings": "Enable advanced settings",
+    "fog_of_war": "Fog of War (exclusive mode)",
     "gold_multiplier": "Gold multiplier",
     "infinite_gold": "Infinite gold",
     "infinite_troops": "Infinite troops",
@@ -2324,6 +2356,7 @@
     "title": "Tutorial"
   },
   "unit_type": {
+    "expedition_ship": "Expedition Ship",
     "atom_bomb": "Atom Bomb",
     "boat": "Boat",
     "city": "City",

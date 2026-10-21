@@ -1,3 +1,4 @@
+import { knownPlayers, knowsPlayer } from "../../game/FogOfWarIntel";
 import {
   Cell,
   Difficulty,
@@ -61,7 +62,10 @@ function randTerritoryTile(
 export function findJuiciestTarget(
   game: Game,
   candidates: Player[],
+  observer?: Player,
 ): Player | null {
+  if (observer)
+    candidates = candidates.filter((p) => knowsPlayer(game, observer, p));
   if (candidates.length === 0) return null;
 
   const stats = candidates.map((p) => {
@@ -131,7 +135,10 @@ function runawayLeadFactor(difficulty: Difficulty): number | null {
 
 // The FFA player (not a bot) owning the most land, if it is far enough ahead
 // of the runner-up that nations should stop helping it and start pressuring it
-export function findRunawayLeader(game: Game): Player | null {
+export function findRunawayLeader(
+  game: Game,
+  observer?: Player,
+): Player | null {
   const { difficulty, gameMode } = game.config().gameConfig();
   if (gameMode !== GameMode.FFA) return null;
   const factor = runawayLeadFactor(difficulty);
@@ -139,7 +146,7 @@ export function findRunawayLeader(game: Game): Player | null {
 
   let leader: Player | null = null;
   let runnerUp: Player | null = null;
-  for (const p of game.players()) {
+  for (const p of observer ? knownPlayers(game, observer) : game.players()) {
     if (p.type() === PlayerType.Bot) continue;
     if (leader === null || p.numTilesOwned() > leader.numTilesOwned()) {
       runnerUp = leader;

@@ -65,6 +65,7 @@ describe("GameLeftSidebar", () => {
       numLandTiles: () => 100,
       ticks: () => 600,
       numTilesWithFallout: () => 0,
+      canViewPlayer: () => true,
       playerViews: () => [player],
     } as unknown as GameView;
     const sidebar = new GameLeftSidebar();
@@ -108,4 +109,31 @@ describe("GameLeftSidebar", () => {
 
     sidebar.remove();
   });
+});
+
+it("refreshes fog rankings each simulation tick instead of retaining the global one-second snapshot", async () => {
+  let tick = 1;
+  const sidebar = document.createElement(
+    "game-left-sidebar",
+  ) as GameLeftSidebar;
+  sidebar.game = {
+    config: () => ({
+      gameConfig: () => ({
+        gameMode: GameMode.FFA,
+        fogOfWar: { enabled: true },
+      }),
+    }),
+    myPlayer: () => null,
+    inSpawnPhase: () => false,
+    ticks: () => tick,
+  } as unknown as GameView;
+  const refresh = vi.fn();
+  Object.defineProperty(sidebar, "playerStats", { value: { refresh } });
+  expect(sidebar.getTickIntervalMs()).toBe(0);
+  sidebar.tick();
+  sidebar.tick();
+  expect(refresh).toHaveBeenCalledTimes(1);
+  tick++;
+  sidebar.tick();
+  expect(refresh).toHaveBeenCalledTimes(2);
 });

@@ -773,3 +773,37 @@ describe("FailOpenPrivilegeChecker#resolveClanTag", () => {
     expect(result).toEqual({ tag: "ABC", dropped: false });
   });
 });
+
+describe("bundled country flags without a cosmetics catalog", () => {
+  const fallback = new FailOpenPrivilegeChecker();
+
+  it("keeps a validated country flag and verified intent", () => {
+    expect(
+      fallback.isAllowed([], { flag: "country:cn", verified: true }),
+    ).toEqual({
+      type: "allowed",
+      cosmetics: { flag: "/flags/cn.svg", verified: true },
+    });
+  });
+
+  it("resolves historical flags by the same allowlist as the full checker", () => {
+    const refs = { flag: "country:Abbasid Caliphate" };
+    expect(fallback.isAllowed([], refs)).toEqual(checker.isAllowed([], refs));
+  });
+
+  it.each(["country:../../secret", "country:missing-country"])(
+    "rejects invalid bundled flag reference %s",
+    (flag) => {
+      expect(fallback.isAllowed([], { flag }).type).toBe("forbidden");
+    },
+  );
+
+  it("does not grant catalog-only cosmetics without catalog data", () => {
+    expect(
+      fallback.isAllowed([], { flag: "flag:cool_flag", skinName: "mountain" }),
+    ).toEqual({
+      type: "allowed",
+      cosmetics: {},
+    });
+  });
+});

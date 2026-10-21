@@ -1,4 +1,5 @@
 import {
+  ExpeditionState,
   NukeState,
   Tick,
   TrainType,
@@ -33,6 +34,7 @@ export class UnitView {
   /** Long-lived renderer state — mutated in place by update(). */
   public state: UnitState;
   /** Engine-only fields not in UnitState. Use warshipState() / transportShipState() to read. */
+  private _expeditionState?: ExpeditionState;
   private _warshipState?: WarshipState;
   private _transportShipState?: TransportShipState;
   private _nukeState?: NukeState;
@@ -43,6 +45,7 @@ export class UnitView {
     data: UnitUpdate,
   ) {
     this.state = unitStateFromUpdate(data);
+    this._expeditionState = data.expeditionState;
     this._warshipState = data.warshipState;
     this._transportShipState = data.transportShipState;
     this._nukeState = data.nukeState;
@@ -77,6 +80,7 @@ export class UnitView {
     this._wasUpdated = true;
     const wasUnderConstruction = this.state.underConstruction;
     applyUnitUpdateInPlace(this.state, data);
+    this._expeditionState = data.expeditionState;
     this._warshipState = data.warshipState;
     this._transportShipState = data.transportShipState;
     this._nukeState = data.nukeState;
@@ -121,6 +125,13 @@ export class UnitView {
   troops(): number {
     return this.state.troops;
   }
+  expeditionState(): ExpeditionState | undefined {
+    return this._expeditionState;
+  }
+  updateExpeditionState(_state: ExpeditionState): void {
+    throw new Error("read only");
+  }
+
   warshipState(): WarshipState {
     if (this._warshipState === undefined) {
       throw new Error("warshipState called on non-warship unit");

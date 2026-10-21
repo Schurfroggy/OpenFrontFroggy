@@ -136,6 +136,7 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
     this.setVisible(false);
     this.unit = null;
     this.player = null;
+    this.playerProfile = null;
   }
 
   public maybeShow(x: number, y: number) {
@@ -148,18 +149,41 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
     const tile = this.game.ref(worldCoord.x, worldCoord.y);
     if (!tile) return;
 
+    if (!this.game.isTileVisible(tile)) return;
     const owner = this.game.owner(tile);
 
-    if (owner && owner.isPlayer()) {
+    if (
+      owner &&
+      owner.isPlayer() &&
+      this.game.canViewPlayer(owner as PlayerView)
+    ) {
       this.player = owner as PlayerView;
-      this.player.profile().then((p) => {
-        this.playerProfile = p;
-      });
+      this.player
+        .profile()
+        .then((p) => {
+          if (
+            this.player === owner &&
+            this.game.canViewPlayer(owner as PlayerView)
+          )
+            this.playerProfile = p;
+        })
+        .catch(() => {
+          if (this.player === owner) this.hide();
+        });
       this.setVisible(true);
     } else if (!this.game.isLand(tile)) {
       const units = this.game
-        .units(UnitType.Warship, UnitType.TradeShip, UnitType.TransportShip)
-        .filter((u) => euclideanDistWorld(worldCoord, u.tile(), this.game) < 50)
+        .units(
+          UnitType.Warship,
+          UnitType.TradeShip,
+          UnitType.TransportShip,
+          UnitType.ExpeditionShip,
+        )
+        .filter(
+          (u) =>
+            this.game.isUnitVisible(u) &&
+            euclideanDistWorld(worldCoord, u.tile(), this.game) < 50,
+        )
         .sort(distSortUnitWorld(worldCoord, this.game));
 
       if (units.length > 0) {
@@ -170,6 +194,11 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
   }
 
   tick() {
+    if (
+      (this.player && !this.game.canViewPlayer(this.player)) ||
+      (this.unit && !this.game.isUnitVisible(this.unit))
+    )
+      this.hide();
     this.requestUpdate();
   }
 
@@ -622,7 +651,11 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
           ${unit.owner().displayName()}
         </div>
         <div class="mt-1">
-          <div class="text-sm opacity-80">${unit.type()}</div>
+          <div class="text-sm opacity-80">
+            ${unit.type() === UnitType.ExpeditionShip
+              ? translateText("unit_type.expedition_ship")
+              : unit.type()}
+          </div>
           ${unit.hasHealth()
             ? html` <div class="text-sm">Health: ${unit.health()}</div> `
             : ""}

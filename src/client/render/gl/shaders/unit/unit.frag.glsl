@@ -42,6 +42,7 @@ const float FLAG_TRADE_FRIENDLY = 3.0;
 const float FLAG_RETREATING     = 4.0;
 const float FLAG_FLICKER_UNTARGETABLE = 5.0; // nuke out of SAM range — dimmed
 const float FLAG_TRADE_SELF     = 6.0;
+const float FLAG_EXPEDITION     = 7.0;
 
 // Flicker hot colors: red → orange → yellow → white
 const vec3 FLICKER_COLORS[4] = vec3[4](
@@ -180,7 +181,9 @@ void main() {
   //   2 = angry (warships attacking — outer ring (180 band) solid red)
   //   4 = retreating (warships fleeing to port — blinking black center)
   float retreatBlink = 0.0;
-  if (abs(vFlags - FLAG_ANGRY) < 0.1) {
+  if (abs(vFlags - FLAG_EXPEDITION) < 0.1) {
+    territoryColor = mix(territoryColor, vec3(0.25, 0.9, 0.95), 0.55);
+  } else if (abs(vFlags - FLAG_ANGRY) < 0.1) {
     // Angry: the outer ring (180) and center (100) go red via territoryColor
     territoryColor = uAngryColor;
   } else if (abs(vFlags - FLAG_RETREATING) < 0.1) {

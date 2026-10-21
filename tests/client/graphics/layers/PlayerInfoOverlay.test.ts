@@ -39,7 +39,7 @@ vi.mock("../../../../src/client/hud/PlayerIcons", () => ({
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PlayerInfoOverlay } from "../../../../src/client/hud/layers/PlayerInfoOverlay";
-import { PlayerType } from "../../../../src/core/game/Game";
+import { PlayerType, UnitType } from "../../../../src/core/game/Game";
 
 // Flattens the mocked-html template tree into one string for assertions.
 function flatten(node: unknown): string {
@@ -75,6 +75,9 @@ describe("PlayerInfoOverlay", () => {
   };
 
   const makeGame = (myPlayer: unknown) => ({
+    isTileVisible: () => true,
+    canViewPlayer: () => true,
+    isUnitVisible: () => true,
     isValidCoord: () => true,
     ref: () => 42,
     owner: () => hovered,
@@ -108,6 +111,42 @@ describe("PlayerInfoOverlay", () => {
     expect(out).toContain("opacity-100 visible");
     expect(out).toContain("Bob");
     expect(out).toContain("text-green-500");
+  });
+
+  it("shows an expedition ship's owner and translated name, then hides it when sight is lost", () => {
+    const ship = {
+      type: () => UnitType.ExpeditionShip,
+      owner: () => hovered,
+      tile: () => 42,
+      hasHealth: () => true,
+      health: () => 250,
+    };
+    const units = vi.fn((...types: UnitType[]) =>
+      types.includes(UnitType.ExpeditionShip) ? [ship] : [],
+    );
+    let visible = true;
+    overlay.game = {
+      ...makeGame(null),
+      owner: () => ({ isPlayer: () => false }),
+      isLand: () => false,
+      x: () => 5,
+      y: () => 5,
+      units,
+      isUnitVisible: () => visible,
+    } as never;
+    overlay.maybeShow(10, 10);
+    const out = flatten(overlay.render());
+    expect(out).toContain("opacity-100 visible");
+    expect(out).toContain("Bob");
+    expect(out).toContain("unit_type.expedition_ship");
+    expect(out).toContain("250");
+    visible = false;
+    overlay.tick();
+    expect(flatten(overlay.render())).toContain("opacity-0 invisible");
+    overlay.maybeShow(10, 10);
+    expect(flatten(overlay.render())).not.toContain(
+      "unit_type.expedition_ship",
+    );
   });
 
   it("shows a white name when there is no local player", () => {

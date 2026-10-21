@@ -31,8 +31,8 @@ import type {
   UnitState,
 } from "../types";
 import type { SpawnCenter } from "./passes/SpawnOverlayPass";
-import type { AttackTroopLabel } from "./passes/WorldTextPass";
 import type { WarArrow } from "./passes/WarArrowPass";
+import type { AttackTroopLabel } from "./passes/WorldTextPass";
 import { GPURenderer } from "./Renderer";
 import type { RenderSettings } from "./RenderSettings";
 
@@ -212,6 +212,10 @@ export class MapRenderer {
   uploadRailroadState(data: Uint8Array): void {
     this.renderer?.uploadRailroadState(data);
   }
+  updateFog(brightness: Uint8Array | null): void {
+    this.renderer?.updateFog(brightness);
+  }
+
   updateUnits(units: Map<number, UnitState>, gameTick: number): void {
     this.renderer?.updateUnits(units, gameTick);
   }
@@ -383,7 +387,7 @@ export class MapRenderer {
   }
   /** War view on/off from the view selector. */
   setWarView(active: boolean): void {
-    this.renderer?.setWarView(active);
+    this.renderer?.setWarView(active && !this.config.fogOfWar());
   }
   /** War view arrows (pushed per tick by WarFrontsController). */
   updateWarArrows(arrows: WarArrow[]): void {

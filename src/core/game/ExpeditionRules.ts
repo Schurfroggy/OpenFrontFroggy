@@ -1,0 +1,1 @@
+export const EXPEDITION_WAIT_TICKS = 600;

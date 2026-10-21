@@ -41,6 +41,7 @@ vi.mock("../../../../src/client/Utils", () => ({
 }));
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { translateText } from "../../../../src/client/Utils";
 import { EventsDisplay } from "../../../../src/client/hud/layers/EventsDisplay";
 import { PlaySoundEffectEvent } from "../../../../src/client/sound/Sounds";
 import { MessageType } from "../../../../src/core/game/Game";
@@ -309,6 +310,18 @@ describe("EventsDisplay handlers", () => {
   });
 
   describe("onDisplayMessageEvent", () => {
+    it("translates expedition notifications", () => {
+      ed.onDisplayMessageEvent({
+        type: GameUpdateType.DisplayEvent,
+        message: "expedition.arrived",
+        messageType: MessageType.EXPLORATION,
+        playerID: 1,
+      });
+      expect(vi.mocked(translateText)).toHaveBeenCalledWith(
+        "expedition.arrived",
+        {},
+      );
+    });
     it("translates unit names in event parameters", () => {
       ed.onDisplayMessageEvent({
         type: GameUpdateType.DisplayEvent,

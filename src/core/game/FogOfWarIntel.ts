@@ -5,6 +5,7 @@ import {
 } from "./FogOfWar";
 import { Game, Player, Structures, Unit, UnitType } from "./Game";
 import { TileRef } from "./GameMap";
+import { fogHasGlobalVision } from "./GamePhases";
 
 // A sparse spatial index shared by every observer in a simulation tick. AI and
 // automatic targeting need boolean sight, not a map-sized brightness texture.
@@ -160,6 +161,11 @@ export class FogIntel {
   }
   private visibilityAt(tile: TileRef): boolean {
     if (!this.game.isValidRef(tile)) return false;
+    if (
+      this.game.config().fogOfWar() &&
+      fogHasGlobalVision(this.game.elapsedGameSeconds())
+    )
+      return true;
     if (this.friends.has(this.game.ownerID(tile)) || this.points.has(tile))
       return true;
     if (
@@ -183,6 +189,11 @@ export class FogIntel {
     return unit.owner() === this.observer || this.visible(unit.tile());
   }
   knows(player: Player): boolean {
+    if (
+      this.game.config().fogOfWar() &&
+      fogHasGlobalVision(this.game.elapsedGameSeconds())
+    )
+      return true;
     if (!this.countries) {
       this.countries = new Set([
         ...this.friends.keys(),

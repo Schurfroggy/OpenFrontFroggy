@@ -601,7 +601,9 @@ export class Config {
               ? 150_000n
               : 300_000n;
           },
-          maxHealth: 250,
+          maxHealth: this.fogOfWar()
+            ? this.unitInfo(UnitType.Warship).maxHealth
+            : 250,
         };
         break;
       case UnitType.Warship:
@@ -627,7 +629,11 @@ export class Config {
       case UnitType.Port:
         info = {
           cost: this.costWrapper(
-            (numUnits: number) => Math.min(1_000_000, pow2(numUnits) * 125_000),
+            (numUnits: number) =>
+              Math.min(
+                this.fogOfWar() ? 500_000 : 1_000_000,
+                pow2(numUnits) * 125_000,
+              ),
             UnitType.Port,
             UnitType.Factory,
           ),

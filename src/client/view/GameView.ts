@@ -13,6 +13,7 @@ import {
   UnitType,
 } from "../../core/game/Game";
 import { GameMap, TileRef } from "../../core/game/GameMap";
+import { fogAmbientBrightness } from "../../core/game/GamePhases";
 import {
   GameUpdateType,
   GameUpdateViewData,
@@ -644,6 +645,9 @@ export class GameView implements GameMap {
     if (renderedFog !== f.fogBrightness)
       f.fogBrightnessVersion = (f.fogBrightnessVersion ?? 0) + 1;
     f.fogBrightness = renderedFog;
+    f.fogAmbientBrightness = this._config.fogOfWar()
+      ? fogAmbientBrightness(this.elapsedGameSeconds())
+      : 0;
     f.units = this.fogBrightness
       ? new Map(
           [...this._unitStates].filter(

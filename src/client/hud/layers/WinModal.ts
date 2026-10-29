@@ -30,8 +30,10 @@ import {
   PLAYER_INDEX_NATION,
   PlayerStats,
 } from "../../../core/StatsSchemas";
+import { ClientEnv } from "../../ClientEnv";
 import { Controller } from "../../Controller";
 import { crazyGamesSDK } from "../../CrazyGamesSDK";
+import "../../GameFeedback";
 import { recordSelfHostedAchievement } from "../../SelfHostedAchievements";
 import {
   PlaySoundEffectEvent,
@@ -112,17 +114,34 @@ export class WinModal extends LitElement implements Controller {
   }
 
   render() {
+    const feedback =
+      this.isVisible &&
+      ClientEnv.selfHosted() &&
+      this.game?.myPlayer()?.hasSpawned() &&
+      !this.game.config().isReplay();
     return html`
       <div
         class="${this.isVisible
-          ? "fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-gray-800/70 p-4 md:p-6 shrink-0 rounded-lg z-[10010] shadow-2xl backdrop-blur-xs text-white w-[min(90vw,700px)] max-w-[90%] max-h-[90dvh] overflow-hidden flex flex-col"
+          ? `fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-gray-800/70 p-4 md:p-6 shrink-0 rounded-lg z-[10010] shadow-2xl backdrop-blur-xs text-white ${feedback ? "w-[min(90vw,1050px)]" : "w-[min(90vw,700px)]"} max-w-[90%] max-h-[90dvh] overflow-hidden flex flex-col`
           : "hidden"}"
       >
         <h2 class="m-0 mb-4 text-[26px] text-center text-white shrink-0">
           ${this._title || ""}
         </h2>
         <div class="min-h-0 flex-1 overflow-y-auto pr-0.5">
-          ${this.innerHtml()}
+          <div
+            class=${feedback
+              ? "grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]"
+              : ""}
+          >
+            <div>${this.innerHtml()}</div>
+            ${feedback
+              ? html`<game-feedback
+                  .gameId=${this.game.gameID()}
+                  .context=${this.feedbackContext()}
+                ></game-feedback>`
+              : nothing}
+          </div>
         </div>
         <div class="mt-4 flex justify-between gap-2.5 shrink-0">
           <o-button
@@ -155,6 +174,22 @@ export class WinModal extends LitElement implements Controller {
         </div>
       </div>
     `;
+  }
+
+  private feedbackContext() {
+    const c = this.game.config().gameConfig();
+    return {
+      map: String(c.gameMap),
+      size: String(c.gameMapSize),
+      mode: String(c.gameMode),
+      difficulty: String(c.difficulty),
+      bots: c.bots ?? 0,
+      nations: String(c.nations),
+      fog: this.game.config().fogOfWar(),
+      won: this.isWin,
+      duration: this.game.elapsedGameSeconds(),
+      version: ClientEnv.gitCommit(),
+    };
   }
 
   private statCard(

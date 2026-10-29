@@ -5,6 +5,7 @@ import {
   USER_SETTINGS_CHANGED_EVENT,
   UserSettings,
 } from "../core/game/UserSettings";
+import { MarkerToggleEvent } from "./MapMarkerEvents";
 import { Platform } from "./Platform";
 import { UIState } from "./UIState";
 import { ReplaySpeedMultiplier } from "./utilities/ReplaySpeedMultiplier";
@@ -229,6 +230,7 @@ interface WebKitGestureEvent extends Event {
 }
 
 export class InputHandler {
+  private middleDown: { x: number; y: number } | null = null;
   private lastPointerX: number = 0;
   private lastPointerY: number = 0;
 
@@ -338,6 +340,7 @@ export class InputHandler {
    */
   private resetPointerState() {
     this.pointerDown = false;
+    this.middleDown = null;
     this.pointers.clear();
     this.lastGestureScale = null;
     if (this.longPressTimer !== null) {
@@ -844,7 +847,12 @@ export class InputHandler {
   private onPointerDown(event: PointerEvent) {
     if (event.button === 1) {
       event.preventDefault();
-      this.eventBus.emit(new AutoUpgradeEvent(event.clientX, event.clientY));
+      if (event.shiftKey) {
+        this.middleDown = null;
+        this.eventBus.emit(new AutoUpgradeEvent(event.clientX, event.clientY));
+      } else {
+        this.middleDown = { x: event.clientX, y: event.clientY };
+      }
       return;
     }
 
@@ -899,8 +907,20 @@ export class InputHandler {
   }
 
   onPointerUp(event: PointerEvent) {
+    if (event.type === "pointercancel") {
+      this.middleDown = null;
+      if (event.button === 1) return;
+    }
     if (event.button === 1) {
       event.preventDefault();
+      const down = this.middleDown;
+      this.middleDown = null;
+      if (
+        down &&
+        Math.hypot(event.clientX - down.x, event.clientY - down.y) <= 6
+      ) {
+        this.eventBus.emit(new MarkerToggleEvent(event.clientX, event.clientY));
+      }
       return;
     }
 
@@ -1070,6 +1090,15 @@ export class InputHandler {
   }
 
   private onPointerMove(event: PointerEvent) {
+    if (
+      this.middleDown &&
+      Math.hypot(
+        event.clientX - this.middleDown.x,
+        event.clientY - this.middleDown.y,
+      ) > 6
+    ) {
+      this.middleDown = null;
+    }
     if (event.button === 1) {
       event.preventDefault();
       return;

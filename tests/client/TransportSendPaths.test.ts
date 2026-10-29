@@ -48,6 +48,7 @@ vi.mock("../../src/client/Utils", () => ({
 }));
 
 import type { LobbyConfig } from "../../src/client/ClientGameRunner";
+import { MarkerSnapshotEvent } from "../../src/client/MapMarkerEvents";
 import {
   CancelAttackIntentEvent,
   SendAttackIntentEvent,
@@ -171,6 +172,55 @@ describe("Transport send paths", () => {
   }
 
   describe("intents", () => {
+    it("sends marker commands separately from turns and publishes server snapshots", () => {
+      const { transport, eventBus, ws } = connected();
+      const receive = vi.fn();
+      eventBus.on(MarkerSnapshotEvent, receive);
+      const command = {
+        type: "map_marker",
+        action: "add",
+        x: 5,
+        y: 6,
+      } as const;
+      transport.sendMapMarker(command, "c0000001");
+      expect(decodeFrames(ws)).toEqual([command]);
+      const markers = [{ id: "m1", owner: "c0000001", x: 5, y: 6 }];
+      ws.serverSend({ type: "map_markers", markers });
+      expect(transport.mapMarkers).toEqual(markers);
+      expect(receive).toHaveBeenCalledWith(new MarkerSnapshotEvent(markers));
+    });
+
+    it("keeps a singleplayer marker book without sending simulation messages", () => {
+      const { transport, eventBus } = makeTransport({
+        gameRecord: {} as LobbyConfig["gameRecord"],
+      });
+      transports.push(transport);
+      const receive = vi.fn();
+      eventBus.on(MarkerSnapshotEvent, receive);
+      transport.connect(
+        () => {},
+        () => {},
+      );
+      for (let x = 1; x <= 4; x++)
+        transport.sendMapMarker(
+          { type: "map_marker", action: "add", x, y: 1 },
+          "me",
+        );
+      expect(transport.mapMarkers.map((m) => m.x)).toEqual([2, 3, 4]);
+      transport.sendMapMarker(
+        {
+          type: "map_marker",
+          action: "remove",
+          id: transport.mapMarkers[0].id,
+        },
+        "me",
+      );
+      expect(transport.mapMarkers.map((m) => m.x)).toEqual([3, 4]);
+      transport.sendMapMarker({ type: "map_marker", action: "clear" }, "me");
+      expect(transport.mapMarkers).toEqual([]);
+      expect(localServer.onMessage).not.toHaveBeenCalled();
+      expect(receive).toHaveBeenCalledTimes(6);
+    });
     it("turns bus intent events into intent frames the server can decode", () => {
       const { eventBus, ws } = connected();
       eventBus.emit(new SendSpawnIntentEvent(123));

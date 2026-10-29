@@ -17,6 +17,11 @@ import {
 } from "../core/game/Game";
 import { TileRef } from "../core/game/GameMap";
 import {
+  MapMarkerBook,
+  type MapMarker,
+  type MarkerCommand,
+} from "../core/MapMarkers";
+import {
   AllPlayersStats,
   ClientHashMessage,
   ClientID,
@@ -48,6 +53,7 @@ import { clientPlatform } from "./ClientPlatform";
 import { isDesktopShell } from "./DesktopShell";
 import { showInGameConfirm } from "./InGameModal";
 import { LocalServer } from "./LocalServer";
+import { MarkerSnapshotEvent } from "./MapMarkerEvents";
 import { describeSocketClose } from "./SocketClose";
 import { homeHref, translateText } from "./Utils";
 import { PlayerView } from "./view";
@@ -525,6 +531,10 @@ export class Transport {
           new Uint8Array(event.data as ArrayBuffer),
           this.zbinCtx ?? undefined,
         );
+        if (msg.type === "map_markers") {
+          this.mapMarkers = msg.markers;
+          this.eventBus.emit(new MarkerSnapshotEvent(msg.markers, msg.addedId));
+        }
         if (msg.type === "redirect") {
           this.handlePoolRedirect(msg.gameID);
           return;
@@ -1073,6 +1083,25 @@ export class Transport {
       }
       this.socket.send(encodeClientMessage(msg, this.zbinCtx ?? undefined));
     }
+  }
+
+  public mapMarkers: MapMarker[] = [];
+  private localMarkerBook = new MapMarkerBook();
+  public sendMapMarker(command: MarkerCommand, owner: string) {
+    if (this.isLocal) {
+      let addedId: string | undefined;
+      if (
+        command.action === "add" &&
+        command.x !== undefined &&
+        command.y !== undefined
+      )
+        addedId = this.localMarkerBook.add(owner, command.x, command.y).id;
+      else if (command.action === "remove" && command.id)
+        this.localMarkerBook.remove(owner, command.id);
+      else if (command.action === "clear") this.localMarkerBook.clear(owner);
+      this.mapMarkers = this.localMarkerBook.visible(owner, new Map());
+      this.eventBus.emit(new MarkerSnapshotEvent(this.mapMarkers, addedId));
+    } else this.sendMsg(command);
   }
 
   private sendMsg(msg: ClientMessage): void {

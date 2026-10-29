@@ -46,7 +46,41 @@ function round(ms: number): number {
   return Math.round(ms * 100) / 100;
 }
 
+const recentMetrics = new Map<string, GameMetrics>();
+export function feedbackMetrics(gameID: string) {
+  return (
+    recentMetrics.get(gameID)?.snapshot() ?? { reconnects: 0, windows: [] }
+  );
+}
 export class GameMetrics {
+  private windows: { at: number; values: Record<string, number> }[] = [];
+  private reconnects = 0;
+  recordReconnect() {
+    this.reconnects++;
+  }
+  snapshot() {
+    const values: Record<string, number> = {};
+    for (const [name, samples] of [
+      ["frame_time", this.frameTime],
+      ["tick_execution", this.tickExecution],
+      ["tick_interval", this.tickInterval],
+      ["ws_rtt", this.roundTrip],
+    ] as const) {
+      const summary = percentiles(samples);
+      if (summary)
+        for (const [key, value] of Object.entries(summary))
+          values[`${name}_${key}`] = value;
+    }
+    return {
+      reconnects: this.reconnects,
+      windows: [
+        ...this.windows,
+        ...(Object.keys(values).length ? [{ at: Date.now(), values }] : []),
+      ]
+        .filter((w) => Date.now() - w.at <= 300000)
+        .slice(-11),
+    };
+  }
   private frameTime: number[] = [];
   private tickExecution: number[] = [];
   private tickInterval: number[] = [];
@@ -58,7 +92,11 @@ export class GameMetrics {
     private readonly gameID: string,
     private readonly clientID: string | undefined,
     private readonly flushIntervalMs: number = FLUSH_INTERVAL_MS,
-  ) {}
+  ) {
+    recentMetrics.set(gameID, this);
+    while (recentMetrics.size > 5)
+      recentMetrics.delete(recentMetrics.keys().next().value!);
+  }
 
   start(): void {
     if (this.timer !== null) return;
@@ -78,7 +116,8 @@ export class GameMetrics {
   /** Called once per animation frame with the frame's timestamp. */
   recordFrame(nowMs: number): void {
     if (this.lastFrameAt !== null) {
-      this.frameTime.push(nowMs - this.lastFrameAt);
+      if (this.frameTime.length < 3600)
+        this.frameTime.push(nowMs - this.lastFrameAt);
     }
     this.lastFrameAt = nowMs;
   }
@@ -111,6 +150,10 @@ export class GameMetrics {
       samples.length = 0;
     }
     if (Object.keys(values).length === 0) return;
+    this.windows.push({ at: Date.now(), values });
+    this.windows = this.windows
+      .filter((w) => Date.now() - w.at <= 300000)
+      .slice(-10);
     reportMeasurement("game_perf", values, {
       gameID: this.gameID,
       clientID: this.clientID ?? "",

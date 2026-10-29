@@ -1,5 +1,6 @@
 import type { StampedIntent } from "../Schemas";
 import { Game, Nukes, Player, PlayerType, Structures, UnitType } from "./Game";
+import { fogAmbientBrightness, fogHasGlobalVision } from "./GamePhases";
 
 export interface FogState {
   brightness: Uint8Array;
@@ -167,6 +168,14 @@ export function addVisionField(
 /** Only each direct friend's own sources are combined: sharing is not transitive. */
 export function computeFog(game: Game, observer: Player): FogState {
   const brightness = new Uint8Array(game.width() * game.height());
+  const ambient = game.config().fogOfWar()
+    ? fogAmbientBrightness(game.elapsedGameSeconds())
+    : 0;
+  const globalVision =
+    ambient > 0 && fogHasGlobalVision(game.elapsedGameSeconds());
+  // Below the information threshold ambient light is presentation-only. Keeping
+  // zero here preserves every existing input, HUD and unit-visibility gate.
+  if (globalVision) brightness.fill(ambient);
   const friends = game
     .players()
     .filter(
@@ -181,7 +190,7 @@ export function computeFog(game: Game, observer: Player): FogState {
     let seeds = groups.get(radius);
     if (!seeds) groups.set(radius, (seeds = []));
     for (const tile of p.tiles()) {
-      brightness[tile] = 10;
+      brightness[tile] = Math.max(brightness[tile], 10);
     }
     for (const tile of p.borderTiles()) seeds.push(tile);
     for (const unit of p.units()) {
@@ -273,6 +282,10 @@ export function computeFog(game: Game, observer: Player): FogState {
         brightness[u.tile()] = 16;
     }
   const countries = new Set<number>([...hosts, ...visitingOwners]);
+  if (globalVision) {
+    for (const p of game.players()) countries.add(p.smallID());
+    return { brightness, countries };
+  }
   for (let tile = 0; tile < brightness.length; tile++) {
     if (brightness[tile] === 0) continue;
     const owner = game.owner(tile);

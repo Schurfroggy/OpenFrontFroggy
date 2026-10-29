@@ -5,6 +5,7 @@ uniform sampler2D uBrightness;
 uniform sampler2D uPreviousBrightness;
 uniform float uBlend;
 uniform float uExponent;
+uniform float uAmbientBrightness;
 uniform vec3 uColor;
 uniform sampler2D uCloudNoise;
 uniform vec3 uCloudColor;
@@ -39,7 +40,8 @@ void main() {
   ivec2 size = textureSize(uBrightness, 0);
   ivec2 tile = clamp(ivec2(floor(vWorldPos)), ivec2(0), size - 1);
   // Visibility revocation is immediate. Filtering/animation never reveals hidden tiles.
-  if (texelFetch(uBrightness, tile, 0).r == 0.0) {
+  bool unobserved = texelFetch(uBrightness, tile, 0).r == 0.0;
+  if (unobserved && uAmbientBrightness == 0.0) {
     fragColor = vec4(fogColor, 1.0);
     return;
   }
@@ -47,7 +49,9 @@ void main() {
   vec2 uv = vWorldPos * texel;
   float light = mix(smoothLight(uPreviousBrightness, uv, texel),
                     smoothLight(uBrightness, uv, texel), uBlend);
-  light = clamp(light, 0.0, 1.0);
+  // Never let interpolation keep revoked local sight alive. Background light
+  // shows terrain only; the simulation mask still gates all units and inputs.
+  light = max(unobserved ? 0.0 : clamp(light, 0.0, 1.0), uAmbientBrightness);
   float visible = pow(light, uExponent) * smoothstep(0.0, 1.5 / 16.0, light);
   fragColor = vec4(fogColor, 1.0 - visible);
 }

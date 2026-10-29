@@ -77,6 +77,7 @@ import {
 import { createCanvas } from "./Utils";
 import { WebGLFrameBuilder } from "./WebGLFrameBuilder";
 import { MapLayerController } from "./controllers/MapLayerController";
+import { MapMarkerController } from "./controllers/MapMarkerController";
 import { createRenderer, GameRenderer } from "./hud/GameRenderer";
 import { goldRateTracker } from "./hud/layers/lib/GoldRateTracker";
 import {
@@ -874,6 +875,14 @@ async function createClientGame(
       mapLayerController,
     );
 
+    const markers = new MapMarkerController(
+      gameView,
+      eventBus,
+      gameRenderer.transformHandler,
+      transport,
+      inputOverlay.parentElement ?? document.body,
+    );
+    markers.init();
     const metrics = new GameMetrics(lobbyConfig.gameID, clientID);
     const { builder: webglBuilder, stopFrameLoop } = mountWebGLFrameLoop(
       gameMap,
@@ -894,6 +903,7 @@ async function createClientGame(
     const disposeRenderer = (): void => {
       if (rendererDisposed) return;
       rendererDisposed = true;
+      markers.dispose();
       stopFrameLoop();
       gameRenderer.dispose?.();
       view.dispose();
@@ -1054,7 +1064,10 @@ export class ClientGameRunner {
       this.currentTickDelay = undefined;
     });
 
+    let connectedBefore = false;
     const onconnect = () => {
+      if (connectedBefore) this.metrics?.recordReconnect();
+      connectedBefore = true;
       console.log("Connected to game server!");
       this.awaitingStart = true;
       this.transport.rejoinGame(this.turnsSeen);

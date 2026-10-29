@@ -23,6 +23,7 @@ import {
   Trios,
   UnitType,
 } from "./game/Game";
+import { MarkerCommandSchema, MarkerSnapshotSchema } from "./MapMarkers";
 import { ArchivedPlayerStatsSchema, PlayerStatsSchema } from "./StatsSchemas";
 import { flattenedEmojiTable, LOBBY_LABEL_MAX } from "./Util";
 
@@ -112,7 +113,8 @@ export type ClientMessage =
   | ClientLogMessage
   | ClientHashMessage
   | ClientSpectateMessage
-  | ClientReportMessage;
+  | ClientReportMessage
+  | z.infer<typeof MarkerCommandSchema>;
 
 export type ServerMessage =
   | ServerTurnMessage
@@ -124,7 +126,8 @@ export type ServerMessage =
   | ServerLobbyInfoMessage
   | ServerNewLobbyMessage
   | ServerPongMessage
-  | ServerRedirectMessage;
+  | ServerRedirectMessage
+  | z.infer<typeof MarkerSnapshotSchema>;
 
 export type ServerTurnMessage = z.infer<typeof ServerTurnMessageSchema>;
 export type ServerStartGameMessage = z.infer<
@@ -1164,6 +1167,7 @@ export const ServerMessageSchema = zb.discriminatedUnion("type", [
   ServerPongMessageSchema,
   // Appended, never inserted: variant order is the wire tag (zbin/README.md).
   ServerRedirectMessageSchema,
+  MarkerSnapshotSchema,
 ]);
 
 //
@@ -1316,6 +1320,7 @@ export const ClientMessageSchema = zb.discriminatedUnion("type", [
   ClientHashSchema,
   ClientSpectateMessageSchema,
   ClientReportMessageSchema,
+  MarkerCommandSchema,
 ]);
 
 //

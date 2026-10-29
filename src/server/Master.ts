@@ -6,8 +6,8 @@ import http from "http";
 import path from "path";
 import { fileURLToPath } from "url";
 import { z } from "zod";
-import { SelfHostedAchievementRecordSchema } from "../core/SelfHostedAchievements";
 import { GAME_ID_REGEX } from "../core/Schemas";
+import { SelfHostedAchievementRecordSchema } from "../core/SelfHostedAchievements";
 import { GameEnv } from "../core/configuration/Config";
 import {
   applyCheckinState,
@@ -37,6 +37,8 @@ import { SelfHostedAchievementStore } from "./SelfHostedAchievementStore";
 import { SelfHostedFriendsStore } from "./SelfHostedFriendsStore";
 import { ServerEnv } from "./ServerEnv";
 import { applyStaticAssetCacheControl } from "./StaticAssetCache";
+import { registerUserFeedbackRoutes } from "./UserFeedbackRoutes";
+import { UserFeedbackStore } from "./UserFeedbackStore";
 
 const playlist = new MapPlaylist();
 let lobbyService: MasterLobbyService;
@@ -377,6 +379,17 @@ app.post("/api/self-hosted/password-reset/complete", (req, res) => {
   return res.json({ account: result.account });
 });
 
+let feedbackStore: UserFeedbackStore | undefined;
+function feedbackDatabase() {
+  return (feedbackStore ??= new UserFeedbackStore(accountStore().db));
+}
+registerUserFeedbackRoutes(app, {
+  enabled: () => ServerEnv.selfHosted(),
+  account: (req) => accountStore().accountForSession(sessionToken(req)),
+  admin: requireSelfHostedAdmin,
+  store: feedbackDatabase,
+});
+
 app.get("/api/self-hosted/admin/overview", (req, res) => {
   if (!ServerEnv.selfHosted())
     return res.status(404).json({ error: "not_found" });
@@ -491,10 +504,14 @@ app.get("/api/self-hosted/friends", (req, res) => {
 app.get("/api/self-hosted/friends/lookup", (req, res) => {
   const account = selfHostedPlayer(req, res);
   if (!account) return;
-  const username = friendUsernameSchema.safeParse({ username: req.query.username });
-  if (!username.success) return res.status(400).json({ error: "invalid_input" });
+  const username = friendUsernameSchema.safeParse({
+    username: req.query.username,
+  });
+  if (!username.success)
+    return res.status(400).json({ error: "invalid_input" });
   const found = friendsStore().lookup(account.id, username.data.username);
-  if (found === null) return res.status(404).json({ error: "account_not_found" });
+  if (found === null)
+    return res.status(404).json({ error: "account_not_found" });
   return res.json(found);
 });
 
@@ -550,7 +567,8 @@ app.delete("/api/self-hosted/friends/:username", (req, res) => {
   const account = selfHostedPlayer(req, res);
   if (!account) return;
   const username = friendUsernameSchema.safeParse(req.params);
-  if (!username.success) return res.status(400).json({ error: "invalid_input" });
+  if (!username.success)
+    return res.status(400).json({ error: "invalid_input" });
   if (!friendsStore().removeFriend(account.id, username.data.username)) {
     return res.status(404).json({ error: "friend_not_found" });
   }
@@ -590,9 +608,7 @@ app.post("/api/self-hosted/invites/:id/:action", (req, res) => {
   const account = selfHostedPlayer(req, res);
   if (!account) return;
   const id = z.uuid().safeParse(req.params.id);
-  const action = z
-    .enum(["accept", "dismiss"])
-    .safeParse(req.params.action);
+  const action = z.enum(["accept", "dismiss"]).safeParse(req.params.action);
   if (!id.success || !action.success) {
     return res.status(400).json({ error: "invalid_input" });
   }

@@ -21,6 +21,8 @@ export class FogOfWarPass {
   private camera: WebGLUniformLocation;
   private enabled = false;
   private exponent: WebGLUniformLocation;
+  private ambient: WebGLUniformLocation;
+  private ambientBrightness = 0;
   private color: WebGLUniformLocation;
   private cloudTexture: WebGLTexture;
   private cloudColor: WebGLUniformLocation;
@@ -39,6 +41,7 @@ export class FogOfWarPass {
     this.vao = createMapQuad(gl, width, height);
     this.camera = gl.getUniformLocation(this.program, "uCamera")!;
     this.exponent = gl.getUniformLocation(this.program, "uExponent")!;
+    this.ambient = gl.getUniformLocation(this.program, "uAmbientBrightness")!;
     this.color = gl.getUniformLocation(this.program, "uColor")!;
     this.blend = gl.getUniformLocation(this.program, "uBlend")!;
     this.cloudColor = gl.getUniformLocation(this.program, "uCloudColor")!;
@@ -95,7 +98,9 @@ export class FogOfWarPass {
     return texture;
   }
 
-  update(brightness: Uint8Array | null, version?: number): void {
+  update(brightness: Uint8Array | null, version?: number, ambient = 0): void {
+    // Uniform-only changes must not upload/swap the unchanged brightness mask.
+    this.ambientBrightness = ambient;
     this.enabled = brightness !== null;
     if (!brightness) {
       this.initialized = false;
@@ -160,6 +165,7 @@ export class FogOfWarPass {
         : 1,
     );
     gl.uniform1f(this.exponent, this.settings.brightnessExponent);
+    gl.uniform1f(this.ambient, this.ambientBrightness / 16);
     gl.uniform3fv(this.color, this.settings.color);
     gl.uniform3fv(this.cloudColor, this.settings.cloudColor);
     gl.uniform1f(this.cloudStrength, this.settings.cloudStrength);

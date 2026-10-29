@@ -10,6 +10,59 @@ import {
 } from "../util/viewStubs";
 
 describe("fog in the live GameView", () => {
+  it("background light alone never exposes units, country info or selectable tiles", () => {
+    const view = makeGameView({
+      myClientID: "client-a",
+      config: stubConfig({ fogOfWar: () => true, isReplay: () => false }),
+    });
+    const brightness = new Uint8Array(100);
+    brightness[5] = 2;
+    const first = makeEmptyGu(1, {
+      fogBrightness: brightness,
+      fogCountries: [1],
+    });
+    first.updates[GameUpdateType.SpawnPhaseEnd] = [
+      { type: GameUpdateType.SpawnPhaseEnd, startTick: 1 },
+    ];
+    first.updates[GameUpdateType.Player] = [
+      makePlayerUpdate(),
+      makePlayerUpdate({ id: "player-b", clientID: "client-b", smallID: 2 }),
+    ];
+    first.updates[GameUpdateType.Unit] = [
+      makeUnitUpdate({
+        id: 2,
+        ownerID: 2,
+        unitType: UnitType.SAMLauncher,
+        pos: 55,
+      }),
+    ];
+    view.update(first);
+    const version = view.frameData().fogBrightnessVersion;
+    for (const [tick, ambient] of [
+      [9001, 2],
+      [12001, 4],
+      [15001, 6],
+    ]) {
+      view.update(makeEmptyGu(tick, { fogCountries: [1] }));
+      expect(view.frameData().fogAmbientBrightness).toBe(ambient);
+      expect(view.frameData().fogBrightnessVersion).toBe(version);
+      expect(view.isTileVisible(5)).toBe(true); // Existing dim local sight survives.
+      expect(view.isTileVisible(55)).toBe(false);
+      expect(view.canViewPlayer(view.player("player-b"))).toBe(false);
+      expect(view.frameData().units.has(2)).toBe(false);
+    }
+    // Permissions change only on the authoritative worker mask, not the shader.
+    view.update(
+      makeEmptyGu(15002, {
+        fogBrightness: new Uint8Array(100).fill(6),
+        fogCountries: [1, 2],
+      }),
+    );
+    expect(view.isTileVisible(55)).toBe(true);
+    expect(view.canViewPlayer(view.player("player-b"))).toBe(true);
+    expect(view.frameData().units.has(2)).toBe(true);
+  });
+
   it("retains mask/version on omitted updates while refreshing country access", () => {
     const view = makeGameView({
       myClientID: "client-a",

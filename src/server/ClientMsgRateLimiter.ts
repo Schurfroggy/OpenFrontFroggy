@@ -28,7 +28,7 @@ export class ClientMsgRateLimiter {
 
     if (bucket.totalBytes >= TOTAL_BYTES) return "kick";
 
-    if (type === "intent") {
+    if (type === "intent" || type === "map_marker") {
       // Intents are stored in turn history for the duration of the game, so
       // oversized intents would accumulate and fill up server RAM.
       // Intents are also sent to all players, so it increase outgoing

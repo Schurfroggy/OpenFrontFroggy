@@ -71,6 +71,7 @@ import {
   IntentOutcome,
 } from "./IntentAuthorization";
 import { ListingState } from "./ListingState";
+import { MapMarkerServer } from "./MapMarkerServer";
 import { identityFor, MatchTelemetryRecorder } from "./MatchTelemetryRecorder";
 import { friendsLookup, NameVisibility } from "./NameVisibility";
 import { poolTargetFor } from "./PoolRouting";
@@ -182,6 +183,7 @@ export function defaultGameServerDeps(): GameServerDeps {
 }
 
 export class GameServer {
+  private mapMarkers: MapMarkerServer | undefined;
   // Compares the per-turn state hashes clients report; a disagreeing client
   // is told once and its votes are ignored from then on.
   private readonly desync = new DesyncDetector();
@@ -803,6 +805,44 @@ export class GameServer {
             gameID: this.id,
             reason: outcome.error,
           });
+        }
+        break;
+      }
+      case "map_marker": {
+        if (
+          !this.hasStarted() ||
+          this.ended ||
+          client.spectator ||
+          !this.gameStartInfo.players.some(
+            (p) => p.clientID === client.clientID,
+          )
+        )
+          return;
+        try {
+          this.mapMarkers ??= new MapMarkerServer(this.gameStartInfo);
+        } catch (error) {
+          this.log.error("Failed to initialize map markers", {
+            error: String(error),
+          });
+          return;
+        }
+        const change = this.mapMarkers.apply(
+          client.clientID,
+          clientMsg,
+          Date.now(),
+        );
+        if (change) {
+          const team = this.mapMarkers.teams.get(client.clientID);
+          for (const peer of this.clients.active())
+            if (
+              peer.clientID === client.clientID ||
+              (team !== undefined &&
+                this.mapMarkers.teams.get(peer.clientID) === team)
+            )
+              this.sendMapMarkers(
+                peer.ws,
+                typeof change === "object" ? change.id : undefined,
+              );
         }
         break;
       }
@@ -1528,6 +1568,25 @@ export class GameServer {
     this.intents.push(intent);
   }
 
+  private sendMapMarkers(ws: WebSocket, addedId?: string) {
+    const client = this.clients.active().find((c) => c.ws === ws);
+    if (!client || client.spectator || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(
+      encodeServerMessage(
+        {
+          type: "map_markers",
+          addedId,
+          markers:
+            this.mapMarkers?.book.visible(
+              client.clientID,
+              this.mapMarkers.teams,
+            ) ?? [],
+        },
+        this.zbinCtx,
+      ),
+    );
+  }
+
   private sendStartGameMsg(ws: WebSocket, lastTurn: number) {
     // Find which client this websocket belongs to
     const client = this.clients.active().find((c) => c.ws === ws);
@@ -1570,6 +1629,7 @@ export class GameServer {
           this.zbinCtx,
         ),
       );
+      if (this.mapMarkers) this.sendMapMarkers(ws);
     } catch (error) {
       this.log.error(`error sending start message for game ${this.id}`, {
         clientID: client.clientID,

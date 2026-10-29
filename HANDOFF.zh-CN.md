@@ -427,6 +427,14 @@ find static/_assets/sounds/music -type f
 
 不要在服务器部署时使用 `npm run build-dev`。生产构建会生成 `asset-manifest.json` 和带内容哈希的 `static/_assets/` 文件，从而保证音乐存在，并让浏览器安全地长期缓存静态资源。
 
+### 发布版本标识与安全切换
+
+- 前端构建使用 `SELF_HOSTED=true npm run build-prod`；构建应在独立候选目录完成，通过后再停止服务、备份数据库并切换目录，缩短停机时间。
+- 线上服务使用 `npm run start:server`，由 systemd 环境保留朋友服所需配置，并将 `GIT_COMMIT` 设置为已发布的完整 Git 提交号。不要继续使用会强制写入 `GIT_COMMIT=DEV` 的 `start:server-dev`。
+- 保留 `/etc/systemd/system/openfrontfroggy.service.d/persistence.conf` 和 `/var/lib/openfrontfroggy`。发布不能上传本地 `.env` 或 `data/`；数据库备份及旧发布版本仅保存在服务器上。
+- 发布后核对 `/desktop/version.json` 的 `clientVersion` 等于提交号，`coreVersion` 等于候选构建的 `static/core-version.txt`；再检查健康接口、首页、Worker 和音乐资源。
+- 回退时恢复旧代码与静态资源、旧 systemd 启动配置。反馈功能的数据库升级只新增表，不需要为了代码回退覆盖已经产生的新账号或对局数据。
+
 ## 13. 性能与访问现状
 
 - 服务器本机的首页和健康检查通常在毫秒级返回，CPU 和内存没有明显压力。

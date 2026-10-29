@@ -17,7 +17,11 @@ import type { SpiralRibbon } from "./SpiralTrails";
  * Satisfied by GameView through TypeScript structural typing.
  */
 export interface FrameUploadTarget {
-  updateFog?(brightness: Uint8Array | null, version?: number): void;
+  updateFog?(
+    brightness: Uint8Array | null,
+    version?: number,
+    ambient?: number,
+  ): void;
   uploadTileAndTrailState(
     tileState: Uint16Array,
     trailState: Uint16Array,
@@ -61,7 +65,11 @@ export function uploadFrameData(
   view: FrameUploadTarget,
   frame: FrameData,
 ): void {
-  view.updateFog?.(frame.fogBrightness ?? null, frame.fogBrightnessVersion);
+  view.updateFog?.(
+    frame.fogBrightness ?? null,
+    frame.fogBrightnessVersion,
+    frame.fogAmbientBrightness ?? 0,
+  );
   // --- Tiles + Trails ---
   // changedTiles[] means "only these tiles changed" (empty = nothing changed,
   // skip upload). null means "no delta info" (first tick — full upload needed).

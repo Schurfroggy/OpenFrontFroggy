@@ -13,6 +13,7 @@ import {
   WarshipSelectionBoxCompleteEvent,
   WarshipSelectionBoxUpdateEvent,
 } from "../src/client/InputHandler";
+import { MarkerToggleEvent } from "../src/client/MapMarkerEvents";
 import { Platform } from "../src/client/Platform";
 import { UIState } from "../src/client/UIState";
 import { GameView, PlayerView, UnitView } from "../src/client/view";
@@ -102,11 +103,48 @@ describe("InputHandler AutoUpgrade", () => {
   });
 
   describe("Middle Mouse Button Handling", () => {
-    test("should emit AutoUpgradeEvent on middle mouse button press", () => {
+    test("plain middle click places a marker; dragging and cancellation do not", () => {
+      const marker = vi.fn();
+      const upgrade = vi.fn();
+      eventBus.on(MarkerToggleEvent, marker);
+      eventBus.on(AutoUpgradeEvent, upgrade);
+      const press = () =>
+        inputHandler["onPointerDown"](
+          new PointerEvent("pointerdown", {
+            button: 1,
+            clientX: 100,
+            clientY: 200,
+            pointerId: 1,
+          }),
+        );
+      const release = (x: number, type = "pointerup") =>
+        inputHandler.onPointerUp(
+          new PointerEvent(type, {
+            button: 1,
+            clientX: x,
+            clientY: 200,
+            pointerId: 1,
+          }),
+        );
+      press();
+      expect(marker).not.toHaveBeenCalled();
+      release(100);
+      expect(marker).toHaveBeenCalledWith(new MarkerToggleEvent(100, 200));
+      press();
+      release(150);
+      press();
+      release(100, "pointercancel");
+      release(100);
+      expect(marker).toHaveBeenCalledTimes(1);
+      expect(upgrade).not.toHaveBeenCalled();
+    });
+
+    test("should emit AutoUpgradeEvent on Shift + middle mouse button press", () => {
       const mockEmit = vi.spyOn(eventBus, "emit");
 
       const pointerEvent = new PointerEvent("pointerdown", {
         button: 1,
+        shiftKey: true,
         clientX: 150,
         clientY: 250,
         pointerId: 1,
@@ -171,6 +209,7 @@ describe("InputHandler AutoUpgrade", () => {
 
       const pointerEvent1 = new PointerEvent("pointerdown", {
         button: 1,
+        shiftKey: true,
         clientX: 100,
         clientY: 200,
         pointerId: 1,
@@ -179,6 +218,7 @@ describe("InputHandler AutoUpgrade", () => {
 
       const pointerEvent2 = new PointerEvent("pointerdown", {
         button: 1,
+        shiftKey: true,
         clientX: 300,
         clientY: 400,
         pointerId: 2,
@@ -207,6 +247,7 @@ describe("InputHandler AutoUpgrade", () => {
 
       const pointerEvent = new PointerEvent("pointerdown", {
         button: 1,
+        shiftKey: true,
         clientX: 0,
         clientY: 0,
         pointerId: 1,
@@ -227,6 +268,7 @@ describe("InputHandler AutoUpgrade", () => {
 
       const pointerEvent = new PointerEvent("pointerdown", {
         button: 1,
+        shiftKey: true,
         clientX: -100,
         clientY: -200,
         pointerId: 1,
@@ -247,6 +289,7 @@ describe("InputHandler AutoUpgrade", () => {
 
       const pointerEvent = new PointerEvent("pointerdown", {
         button: 1,
+        shiftKey: true,
         clientX: 100.5,
         clientY: 200.7,
         pointerId: 1,
@@ -593,6 +636,7 @@ describe("InputHandler AutoUpgrade", () => {
 
       const pointerEvent1 = new PointerEvent("pointerdown", {
         button: 1,
+        shiftKey: true,
         clientX: 100,
         clientY: 200,
         pointerId: 1,
@@ -601,6 +645,7 @@ describe("InputHandler AutoUpgrade", () => {
 
       const pointerEvent2 = new PointerEvent("pointerdown", {
         button: 1,
+        shiftKey: true,
         clientX: 300,
         clientY: 400,
         pointerId: 2,
@@ -615,6 +660,7 @@ describe("InputHandler AutoUpgrade", () => {
 
       const pointerEvent1 = new PointerEvent("pointerdown", {
         button: 1,
+        shiftKey: true,
         clientX: 100,
         clientY: 200,
         pointerId: 1,
@@ -623,6 +669,7 @@ describe("InputHandler AutoUpgrade", () => {
 
       const pointerEvent2 = new PointerEvent("pointerdown", {
         button: 1,
+        shiftKey: true,
         clientX: 300,
         clientY: 400,
         pointerId: 1,
@@ -639,6 +686,7 @@ describe("InputHandler AutoUpgrade", () => {
 
       const pointerEvent = new PointerEvent("pointerdown", {
         button: 1,
+        shiftKey: true,
         clientX: Number.MAX_SAFE_INTEGER,
         clientY: Number.MAX_SAFE_INTEGER,
         pointerId: 1,
@@ -659,6 +707,7 @@ describe("InputHandler AutoUpgrade", () => {
 
       const pointerEvent = new PointerEvent("pointerdown", {
         button: 1,
+        shiftKey: true,
         clientX: Number.MIN_SAFE_INTEGER,
         clientY: Number.MIN_SAFE_INTEGER,
         pointerId: 1,
@@ -679,6 +728,7 @@ describe("InputHandler AutoUpgrade", () => {
 
       const pointerEvent = new PointerEvent("pointerdown", {
         button: 1,
+        shiftKey: true,
         clientX: NaN,
         clientY: NaN,
         pointerId: 1,
@@ -699,6 +749,7 @@ describe("InputHandler AutoUpgrade", () => {
 
       const pointerEvent = new PointerEvent("pointerdown", {
         button: 1,
+        shiftKey: true,
         clientX: Infinity,
         clientY: -Infinity,
         pointerId: 1,
@@ -723,6 +774,7 @@ describe("InputHandler AutoUpgrade", () => {
 
       const pointerEvent = new PointerEvent("pointerdown", {
         button: 1,
+        shiftKey: true,
         clientX: 150,
         clientY: 250,
         pointerId: 1,
@@ -746,6 +798,7 @@ describe("InputHandler AutoUpgrade", () => {
 
       const pointerEvent = new PointerEvent("pointerdown", {
         button: 1,
+        shiftKey: true,
         clientX: 150,
         clientY: 250,
         pointerId: 1,
@@ -774,6 +827,7 @@ describe("InputHandler AutoUpgrade", () => {
 
       const pointerEvent = new PointerEvent("pointerdown", {
         button: 1,
+        shiftKey: true,
         clientX: 150,
         clientY: 250,
         pointerId: 1,

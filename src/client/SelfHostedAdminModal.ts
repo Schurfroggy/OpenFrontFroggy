@@ -1,5 +1,6 @@
 import { html } from "lit";
 import { customElement, state } from "lit/decorators.js";
+import "./AdminFeedback";
 import { BaseModal } from "./components/BaseModal";
 import {
   loadSelfHostedAdminOverview,
@@ -68,8 +69,10 @@ export class SelfHostedAdminModal extends BaseModal {
                 >
                   ${translateText("self_hosted_admin.forbidden")}
                 </div>`
-              : html`${this.renderRequests(this.overview.resets)}
-                ${this.renderAccounts(this.overview)}`}
+              : html`<admin-feedback></admin-feedback>${this.renderRequests(
+                    this.overview.resets,
+                  )}
+                  ${this.renderAccounts(this.overview)}`}
         </div>
       </div>
     `;

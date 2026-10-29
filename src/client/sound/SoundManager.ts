@@ -1,6 +1,7 @@
 import { Howl } from "howler";
 import { assetUrl } from "../../core/AssetUrls";
 import { EventBus } from "../../core/EventBus";
+import { LATE_GAME_START_SECONDS } from "../../core/game/GamePhases";
 import { AudioMixer, PlayableCategory } from "./AudioMixer";
 import { fadeInMusic } from "./MusicFade";
 import {
@@ -15,7 +16,6 @@ import {
 
 const AMBIENCE_FADE_MS = 500;
 const MUSIC_GAP_MS = 10_000;
-const FIRE_MUSIC_AFTER_SECONDS = 15 * 60;
 const PLAYING_TRACKS = [
   "Playing1.mp3",
   "Playing2.mp3",
@@ -149,7 +149,7 @@ export class SoundManager {
 
     if (
       this.musicPhase === "playing" &&
-      this.elapsedGameSeconds() >= FIRE_MUSIC_AFTER_SECONDS
+      this.elapsedGameSeconds() >= LATE_GAME_START_SECONDS
     ) {
       this.musicPhase = "fire";
       this.musicPlaylist = shuffleTracks(FIRE_TRACKS, this.lastMusicTrack);

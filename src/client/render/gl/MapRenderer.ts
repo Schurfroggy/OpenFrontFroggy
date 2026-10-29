@@ -212,8 +212,12 @@ export class MapRenderer {
   uploadRailroadState(data: Uint8Array): void {
     this.renderer?.uploadRailroadState(data);
   }
-  updateFog(brightness: Uint8Array | null, version?: number): void {
-    this.renderer?.updateFog(brightness, version);
+  updateFog(
+    brightness: Uint8Array | null,
+    version?: number,
+    ambient = 0,
+  ): void {
+    this.renderer?.updateFog(brightness, version, ambient);
   }
 
   updateUnits(units: Map<number, UnitState>, gameTick: number): void {

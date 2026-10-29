@@ -20,6 +20,8 @@ export interface FrameData {
   /** Immutable mask until replaced; version also covers spawn-preview changes. */
   readonly fogBrightness?: Uint8Array | null;
   readonly fogBrightnessVersion?: number;
+  /** Presentation-only light; permission changes come from the worker mask. */
+  readonly fogAmbientBrightness?: number;
   // ── Core accumulated state ────────────────────────────────────────────
 
   readonly tick: number;

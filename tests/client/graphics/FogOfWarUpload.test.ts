@@ -36,6 +36,20 @@ function scene() {
 afterEach(() => vi.restoreAllMocks());
 
 describe("fog texture updates", () => {
+  it("changes background light as a uniform without retransferring the mask", () => {
+    const { pass, gl } = scene();
+    Object.assign(pass, { ambient: "ambient" });
+    const mask = new Uint8Array(100);
+    pass.update(mask, 1, 0);
+    pass.update(mask, 1, 2);
+    pass.draw(new Float32Array(9));
+    expect(gl.uniform1f).toHaveBeenCalledWith("ambient", 2 / 16);
+    pass.update(mask, 1, 4);
+    pass.draw(new Float32Array(9));
+    expect(gl.uniform1f).toHaveBeenCalledWith("ambient", 4 / 16);
+    expect(gl.texSubImage2D).toHaveBeenCalledTimes(2);
+  });
+
   it("skips unchanged uploads and lets interpolation and cloud time advance", () => {
     const { pass, gl } = scene();
     const clock = vi.spyOn(performance, "now").mockReturnValue(0);

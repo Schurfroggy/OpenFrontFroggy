@@ -375,10 +375,10 @@ ubuntu@124.222.245.42
 - 该目录是文件副本，不是 Git 工作区；云端不能直接依赖 `git pull`。
 - systemd 服务：`openfrontfroggy.service`
 - Nginx 位于前端，代理协调服务和两个 Worker。
-- 正式入口：`https://schurfroggy.art/`；`https://www.schurfroggy.art/` 也指向同一服务。两个域名的 A 记录均为 `124.222.245.42`，DNS 由 DNSPod 托管。
+- 正式入口：`https://openfront.schurfroggy.art/`。DNS 由 DNSPod 托管，主机记录 `openfront` 的 A 记录为 `124.222.245.42`；`schurfroggy.art` 和 `www.schurfroggy.art` 也保留指向同一服务。
 - `openfront.schurfroggy.top` 是旧域名，不作为当前访问入口。不要根据该旧域名的 Cloudflare 解析排查正式站点。
-- 正式域名的 Nginx 配置：`/etc/nginx/sites-available/openfrontfroggy-art`，通过 `sites-enabled` 启用，复用 `/etc/nginx/snippets/openfrontfroggy-proxy.conf`；HTTP 自动跳转 HTTPS。
-- HTTPS 证书覆盖 `schurfroggy.art` 和 `www.schurfroggy.art`，路径为 `/etc/letsencrypt/live/schurfroggy.art/fullchain.pem`，由 Certbot Nginx 插件签发，`certbot.timer` 自动续期。
+- 正式域名的 Nginx 配置：`/etc/nginx/sites-available/openfrontfroggy-openfront-art`，通过 `sites-enabled` 启用，复用 `/etc/nginx/snippets/openfrontfroggy-proxy.conf`；HTTP 自动跳转 HTTPS。主域名和 `www` 使用独立的 `openfrontfroggy-art` 配置。
+- 正式域名的 HTTPS 证书路径：`/etc/letsencrypt/live/openfront.schurfroggy.art/fullchain.pem`；主域名和 `www` 的证书路径为 `/etc/letsencrypt/live/schurfroggy.art/fullchain.pem`。证书均由 Certbot Nginx 插件签发，`certbot.timer` 自动续期。
 - 网站备案号：`粤ICP备2026169329号-1`，公共页脚链接到 `https://beian.miit.gov.cn/`。
 
 服务环境的关键项：

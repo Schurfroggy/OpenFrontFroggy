@@ -142,6 +142,16 @@ export class Footer extends LitElement {
               class="hover:text-white transition-colors"
             ></a>
           </div>
+          <div class="mt-1 px-4 text-center text-xs">
+            <a
+              href="https://beian.miit.gov.cn/"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="hover:text-white transition-colors"
+            >
+              粤ICP备2026169329号-1
+            </a>
+          </div>
         </div>
 
         <!-- Phones keep the full store widget on the play page instead; there

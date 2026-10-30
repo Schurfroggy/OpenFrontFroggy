@@ -375,7 +375,11 @@ ubuntu@124.222.245.42
 - 该目录是文件副本，不是 Git 工作区；云端不能直接依赖 `git pull`。
 - systemd 服务：`openfrontfroggy.service`
 - Nginx 位于前端，代理协调服务和两个 Worker。
-- 当前通过服务器 IP 访问；曾配置 `openfront.schurfroggy.top`，但域名因备案问题暂未作为正式入口。
+- 正式入口：`https://schurfroggy.art/`；`https://www.schurfroggy.art/` 也指向同一服务。两个域名的 A 记录均为 `124.222.245.42`，DNS 由 DNSPod 托管。
+- `openfront.schurfroggy.top` 是旧域名，不作为当前访问入口。不要根据该旧域名的 Cloudflare 解析排查正式站点。
+- 正式域名的 Nginx 配置：`/etc/nginx/sites-available/openfrontfroggy-art`，通过 `sites-enabled` 启用，复用 `/etc/nginx/snippets/openfrontfroggy-proxy.conf`；HTTP 自动跳转 HTTPS。
+- HTTPS 证书覆盖 `schurfroggy.art` 和 `www.schurfroggy.art`，路径为 `/etc/letsencrypt/live/schurfroggy.art/fullchain.pem`，由 Certbot Nginx 插件签发，`certbot.timer` 自动续期。
+- 网站备案号：`粤ICP备2026169329号-1`，公共页脚链接到 `https://beian.miit.gov.cn/`。
 
 服务环境的关键项：
 

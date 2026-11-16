@@ -5,15 +5,22 @@ import { UserMeResponse } from "../core/ApiSchemas";
 import { sanitizeClanTag } from "../core/Util";
 import {
   MAX_CLAN_TAG_LENGTH,
+  MAX_NICKNAME_LENGTH,
   MAX_USERNAME_LENGTH,
   MIN_CLAN_TAG_LENGTH,
+  MIN_NICKNAME_LENGTH,
   MIN_USERNAME_LENGTH,
   validateClanTag,
+  validateNickname,
   validateUsername,
 } from "../core/validations/username";
 import { getUserMe, invalidateUserMe } from "./Api";
 import { checkClanTagOwnership } from "./ClanApi";
 import { ClientEnv } from "./ClientEnv";
+import {
+  loadSelfHostedAccount,
+  type SelfHostedAccount,
+} from "./SelfHostedAccount";
 import { verifiedBadge } from "./components/ui/VerifiedBadge";
 import { crazyGamesSDK } from "./CrazyGamesSDK";
 import { showInGameAlert, showInGameConfirm } from "./InGameModal";
@@ -162,6 +169,10 @@ export class UsernameInput extends LitElement {
   private readonly onSteam = steamSDK.isOnSteam();
 
   @property({ type: String }) validationError: string = "";
+  // Self-hosted identity: the account (when signed in) owns the nickname, so
+  // the field is read-only. Guests have no account and edit their own nickname.
+  @state() private selfHostedAccount: SelfHostedAccount | null = null;
+  private selfHostedAccountLoaded = false;
   // Ownership-check feedback (i18n key) shown inline beneath the tag input. Only
   // "not a member" gates the buttons (see emitValidity); the rest is advisory.
   @state() private clanTagOwnershipError: string = "";
@@ -659,6 +670,23 @@ export class UsernameInput extends LitElement {
     // ours to overwrite; a name the player typed never is.
     const reseedable = this.onSteam && this.storedNameIsGenerated();
     this.loadStoredUsername();
+    if (this.selfHosted) {
+      // The account's nickname is authoritative: a fresh device, or a nickname
+      // changed elsewhere, must not keep playing under a stale stored name.
+      void loadSelfHostedAccount().then((account) => {
+        this.selfHostedAccount = account;
+        this.selfHostedAccountLoaded = true;
+        if (account && this.baseUsername !== account.nickname) {
+          this.baseUsername = account.nickname;
+          this.usernameIsGenerated = false;
+        }
+        // Re-validate either way: a name the server owns is grandfathered even
+        // if it predates the nickname length rule (it equals a legacy
+        // username), and validateAndStore is what knows that.
+        this.validateAndStore();
+        this.requestUpdate();
+      });
+    }
     // On CrazyGames the account username is applied here but never persisted
     // (see loadStoredUsername / validateAndStore), so logging out — which
     // reloads the whole page — falls back to a fresh guest username instead of
@@ -1081,7 +1109,7 @@ export class UsernameInput extends LitElement {
   }
 
   private renderNameInput() {
-    if (this.selfHosted) {
+    if (this.selfHosted && (this.selfHostedAccount !== null || !this.selfHostedAccountLoaded)) {
       return html`
         <div
           class="flex items-center text-left text-white text-ellipsis overflow-hidden cursor-default ${NAME_BOX} ${NAME_TEXT}"
@@ -1090,6 +1118,22 @@ export class UsernameInput extends LitElement {
         >
           <span class="truncate">${this.baseUsername}</span>
         </div>
+      `;
+    }
+    if (this.selfHosted) {
+      // Guests: a nickname only — any script, at most 10 characters, and the
+      // account modal is where a signed-in player edits theirs.
+      return html`
+        <input
+          type="text"
+          .value=${this.baseUsername}
+          @input=${this.handleUsernameChange}
+          placeholder="${translateText("username.enter_nickname")}"
+          minlength="${MIN_NICKNAME_LENGTH}"
+          maxlength="${MAX_NICKNAME_LENGTH}"
+          aria-label=${translateText("username.enter_nickname")}
+          class="text-left text-white placeholder-white/50 transition-colors text-ellipsis hover:bg-white/5 focus:bg-white/5 focus:ring-2 focus:ring-malibu-blue/60 focus:outline-none ${NAME_BOX} ${NAME_TEXT}"
+        />
       `;
     }
     return html`
@@ -1255,7 +1299,14 @@ export class UsernameInput extends LitElement {
       return;
     }
 
-    const result = validateUsername(trimmedBase);
+    // A self-hosted nickname that came from the account is server-owned: it
+    // may be a legacy 15-character username that predates the 10-character
+    // rule. Only names the player is typing in are length-checked.
+    const result = this.selfHosted
+      ? this.selfHostedAccount?.nickname === trimmedBase
+        ? { isValid: true }
+        : validateNickname(trimmedBase)
+      : validateUsername(trimmedBase);
     this._isValid = result.isValid;
     if (result.isValid) {
       // Never persist on CrazyGames: keeping localStorage empty means a logout

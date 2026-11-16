@@ -8,6 +8,7 @@ const translations = {
   "cosmetics.adfree": "ad-free for life!",
   "cosmetics.artist_label": "Artist:",
   "cosmetics.rare": "Rare",
+  "cosmetics.show_details": "Show cosmetic details",
   "cosmetics.usd_value": "Value: {usd}",
   "cosmetics.verified_name": "Verified username",
   "cosmetics.verified_name_info": "Reserved username",

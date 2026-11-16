@@ -106,7 +106,7 @@ export class ExpeditionShipExecution implements Execution {
   }
   private notify(key: string): void {
     this.game.displayMessage(
-      `expedition.${key}`,
+      key,
       MessageType.EXPLORATION,
       this.owner.id(),
       undefined,
@@ -164,7 +164,7 @@ export class ExpeditionShipExecution implements Execution {
     const notify = this.state().phase !== "stranded";
     this.phase("stranded");
     this.nextAttempt = this.game.ticks() + 100;
-    if (notify) this.notify("stranded_notice");
+    if (notify) this.notify("expedition.stranded_notice");
   }
   private remember(): void {
     const tile = this.ship!.tile();
@@ -283,7 +283,7 @@ export class ExpeditionShipExecution implements Execution {
         const tile = this.game.ref(x, y);
         if (!this.shoreNotified && this.game.isLand(tile)) {
           this.shoreNotified = true;
-          this.notify("coast_discovered");
+          this.notify("expedition.coast_discovered");
         }
         const country = this.game.owner(tile);
         if (
@@ -293,7 +293,7 @@ export class ExpeditionShipExecution implements Execution {
           !this.discovered.includes(country.smallID())
         ) {
           this.discovered.push(country.smallID());
-          this.notify("discovered");
+          this.notify("expedition.discovered");
           return;
         }
       }
@@ -314,7 +314,9 @@ export class ExpeditionShipExecution implements Execution {
         if (this.state().phase === "sailing") {
           this.phase("surveying", ticks + EXPEDITION_WAIT_TICKS);
           this.notify(
-            this.ship!.tile() === this.target ? "arrived" : "approached",
+            this.ship!.tile() === this.target
+              ? "expedition.arrived"
+              : "expedition.approached",
           );
         } else if (this.state().phase === "exploring") this.explore();
         return;

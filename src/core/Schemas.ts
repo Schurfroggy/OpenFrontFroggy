@@ -303,10 +303,19 @@ export const RENDERABLE_NAME_HAS_ALNUM_RE = new RegExp(
 );
 
 // Requires at least one non-space so a name is never all padding.
+//
+// This is the wire contract for a player's display name, read back from
+// archived records too, so it only ever widens. Self-hosted nicknames may be
+// any script (Chinese included) while the renderer's glyph atlas is Latin-1:
+// players draw those names through <nation-label-overlay> instead (see
+// PlayerView.mapLabelName). Control characters stay out because they can break
+// log lines and the lobby list.
 export const UsernameSchema = z
   .string()
-  .regex(new RegExp(`^(?=.*\\S)[${RENDERABLE_NAME_CHARS}]+$`, "u"))
-  .min(3)
+  // Nicknames are plain text, including punctuation; map labels outside the
+  // atlas allowlist use the DOM overlay. Keep the legacy wire length for replays.
+  .regex(/^(?=.*\S)[^\p{Cc}\u2028\u2029]+$/u)
+  .min(1)
   .max(27);
 
 export const ClanTagSchema = z

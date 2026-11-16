@@ -8,6 +8,7 @@ import {
 } from "../game/Game";
 import { TileRef } from "../game/GameMap";
 import { ErrorUpdate, GameUpdateViewData } from "../game/GameUpdates";
+import type { WarFront } from "../game/WarFront";
 import { ClientID, GameStartInfo, Turn } from "../Schemas";
 
 export type WorkerMessageType =
@@ -129,11 +130,16 @@ export interface AttackClusteredPositionsMessage extends BaseWorkerMessage {
   type: "attack_clustered_positions";
   playerID: number;
   attackID?: string;
+  includeWarFronts?: boolean;
 }
 
 export interface AttackClusteredPositionsResultMessage extends BaseWorkerMessage {
   type: "attack_clustered_positions_result";
-  attacks: { id: string; positions: { x: number; y: number }[] }[];
+  attacks: {
+    id: string;
+    positions: { x: number; y: number }[];
+    fronts?: WarFront[];
+  }[];
 }
 
 export interface TransportShipSpawnMessage extends BaseWorkerMessage {

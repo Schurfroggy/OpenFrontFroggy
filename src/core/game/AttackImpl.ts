@@ -15,8 +15,17 @@ import { Attack, Player, TerraNullius } from "./Game";
 import { GameImpl } from "./GameImpl";
 import { TileRef } from "./GameMap";
 import { PlayerImpl } from "./PlayerImpl";
+import {
+  deriveWarFronts,
+  type ConquestSample,
+  type WarFront,
+} from "./WarFront";
 
 export class AttackImpl implements Attack {
+  // On-demand visual cache: omitted from snapshots and never read by combat.
+  private visualHistory?: ConquestSample[];
+  private visualHistoryCursor = 0;
+  private visualHistoryUntil = -1;
   private _isActive = true;
   private _borderSize = 0;
   public _retreating = false;
@@ -108,6 +117,44 @@ export class AttackImpl implements Attack {
       this._borderSize -= 1;
       this._border.delete(tile);
     }
+  }
+
+  recordConquest(tile: TileRef): void {
+    if (!this.visualHistory || this._mg.ticks() > this.visualHistoryUntil)
+      return;
+    const map = this._mg.map();
+    let dx = 0,
+      dy = 0;
+    const neighbors: TileRef[] = [];
+    const count = map.neighbors4(tile, neighbors);
+    for (let i = 0; i < count; i++) {
+      const from = neighbors[i];
+      if (map.ownerID(from) !== this._attacker.smallID()) continue;
+      dx += map.x(tile) - map.x(from);
+      dy += map.y(tile) - map.y(from);
+    }
+    const length = Math.sqrt(dx * dx + dy * dy);
+    if (length < 0.001) return;
+    this.visualHistory[this.visualHistoryCursor] = {
+      x: this._mg.map().x(tile),
+      y: this._mg.map().y(tile),
+      dx: dx / length,
+      dy: dy / length,
+      tick: this._mg.ticks(),
+    };
+    this.visualHistoryCursor = (this.visualHistoryCursor + 1) % 256;
+  }
+
+  warFronts(): WarFront[] {
+    this.visualHistory ??= [];
+    this.visualHistoryUntil = this._mg.ticks() + 100;
+    return deriveWarFronts(
+      this._mg,
+      this._border,
+      this._attacker.smallID(),
+      this._target.smallID(),
+      this.visualHistory,
+    );
   }
 
   // Returns the top 2 clustered positions of the attack's border.
@@ -213,6 +260,9 @@ export class AttackImpl implements Attack {
 
   /** Fills a prototype-only shell; see RestorableExecution.restoreSnapshot. */
   restoreSnapshot(s: AttackState, r: SnapshotReader): void {
+    this.visualHistory = undefined;
+    this.visualHistoryCursor = 0;
+    this.visualHistoryUntil = -1;
     this._mg = r.game;
     this._id = s.id;
     this._target = r.owner(s.target);

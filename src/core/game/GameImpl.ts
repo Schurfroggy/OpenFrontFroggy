@@ -34,6 +34,11 @@ import { simpleHash } from "../Util";
 import { AllianceImpl } from "./AllianceImpl";
 import { AllianceRequestImpl } from "./AllianceRequestImpl";
 import {
+  refreshFogAIContacts,
+  restoreFogAIContacts,
+  snapshotFogAIContacts,
+} from "./FogOfWarIntel";
+import {
   Alliance,
   AllianceRequest,
   Cell,
@@ -549,6 +554,7 @@ export class GameImpl implements Game {
     for (const [tile, expiry] of this._nuclearFogSources) {
       if (expiry <= this._ticks) this._nuclearFogSources.delete(tile);
     }
+    refreshFogAIContacts(this);
     this.updates = createGameUpdatesMap();
     this.tileUpdatePairs.length = 0;
     this.execs.forEach((e) => {
@@ -1464,6 +1470,7 @@ export class GameImpl implements Game {
     const unInitExecs = this.unInitExecs.map((e) => w.exec(e));
     return {
       nuclearFogSources: [...this._nuclearFogSources],
+      fogAIContacts: snapshotFogAIContacts(this),
       ticks: this._ticks,
       startTick: this.startTick,
       humans: this._humans.map(playerInfoData),
@@ -1517,6 +1524,7 @@ export class GameImpl implements Game {
    */
   restoreState(s: GameState, r: SnapshotReader): void {
     this._nuclearFogSources = new Map(s.nuclearFogSources);
+    restoreFogAIContacts(this, s.fogAIContacts);
     this._ticks = s.ticks;
     this.startTick = s.startTick;
     this.execs = s.execs.map((i) => r.exec(i));
@@ -1651,10 +1659,22 @@ export class GameImpl implements Game {
 
 export const GameSnapshot = snapshotType({
   name: "Game",
-  version: 2,
-  migrations: { 1: (old) => ({ ...old, nuclearFogSources: [] }) },
+  version: 3,
+  migrations: {
+    1: (old) => ({ ...old, nuclearFogSources: [] }),
+    2: (old) => ({ ...old, fogAIContacts: [] }),
+  },
   schema: z.object({
     nuclearFogSources: z.array(z.tuple([zInt(), zInt()])),
+    fogAIContacts: z.array(
+      z.object({
+        observer: zPlayerRef(),
+        refreshedTick: zInt(),
+        lastQueryTick: zInt(),
+        nextRefreshTick: zInt(),
+        countries: z.array(zPlayerRef()),
+      }),
+    ),
     ticks: zInt(),
     startTick: zInt().nullable(),
     humans: z.array(PlayerInfoSchema),

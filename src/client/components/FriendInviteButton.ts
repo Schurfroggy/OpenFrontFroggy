@@ -193,8 +193,10 @@ export class FriendInviteButton extends LitElement {
                     return html`<li
                       class="flex items-center justify-between gap-2 py-1.5"
                     >
-                      <span class="min-w-0 truncate text-sm"
-                        >${friend.username}</span
+                      <span
+                        class="min-w-0 truncate text-sm"
+                        title=${friend.username}
+                        >${friend.nickname}</span
                       >
                       <button
                         class="shrink-0 rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-widest ${already

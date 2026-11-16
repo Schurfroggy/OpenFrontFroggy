@@ -9,6 +9,7 @@ import { z } from "zod";
 import { GAME_ID_REGEX } from "../core/Schemas";
 import { SelfHostedAchievementRecordSchema } from "../core/SelfHostedAchievements";
 import { GameEnv } from "../core/configuration/Config";
+import { NicknameSchema } from "../core/validations/Nickname";
 import {
   applyCheckinState,
   CHECKIN_INTERVAL_MS,
@@ -61,13 +62,15 @@ function accountStore(): SelfHostedAccountStore {
 }
 
 const SELF_HOSTED_SESSION_COOKIE = "openfront_self_hosted_session";
+// Nicknames are display-only: any script, 1..10 characters counted as code
+// points (so a Chinese character or an emoji is one), no profanity filter.
+// The username keeps its own login rules and never changes.
+
 const accountCredentialsSchema = z.object({
   username: z.string().trim().min(3).max(20),
   password: z.string().min(8).max(128),
 });
-const accountRenameSchema = z.object({
-  username: z.string().trim().min(3).max(20),
-});
+const accountNicknameSchema = z.object({ nickname: NicknameSchema });
 const passwordChangeSchema = z.object({
   currentPassword: z.string().min(8).max(128),
   newPassword: z.string().min(8).max(128),
@@ -299,18 +302,11 @@ app.patch("/api/self-hosted/account/profile", (req, res) => {
     return res.status(404).json({ error: "not_found" });
   const account = accountStore().accountForSession(sessionToken(req));
   if (!account) return res.status(401).json({ error: "guest" });
-  const parsed = accountRenameSchema.safeParse(req.body);
+  const parsed = accountNicknameSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_input" });
-  try {
-    return res.json({
-      account: accountStore().rename(account.id, parsed.data.username),
-    });
-  } catch (error) {
-    if (error instanceof Error && error.message === "username_taken") {
-      return res.status(409).json({ error: "username_taken" });
-    }
-    throw error;
-  }
+  return res.json({
+    account: accountStore().setNickname(account.id, parsed.data.nickname),
+  });
 });
 
 app.patch("/api/self-hosted/account/password", (req, res) => {

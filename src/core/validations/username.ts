@@ -5,6 +5,8 @@ import {
   RENDERABLE_NAME_CHARS,
   UsernameSchema,
 } from "../Schemas";
+import { MAX_NICKNAME_LENGTH, NICKNAME_CONTROL_CHAR_RE } from "./Nickname";
+export { MAX_NICKNAME_LENGTH, MIN_NICKNAME_LENGTH } from "./Nickname";
 
 export const MIN_USERNAME_LENGTH = 3;
 // Matches MAX_ACCOUNT_USERNAME_LENGTH so a free-form name can't outgrow the
@@ -58,7 +60,16 @@ export function validateUsername(username: string): {
   isValid: boolean;
   error?: string;
 } {
-  // Checked ahead of the schema, which stays wide enough for archived records.
+  // Checked ahead of the schema, which stays wide enough for archived records
+  // and for self-hosted nicknames (which may be a single character).
+  if (typeof username === "string" && username.length < MIN_USERNAME_LENGTH) {
+    return {
+      isValid: false,
+      error: translateText("username.too_short", {
+        min: MIN_USERNAME_LENGTH,
+      }),
+    };
+  }
   if (typeof username === "string" && username.length > MAX_USERNAME_LENGTH) {
     return {
       isValid: false,
@@ -167,5 +178,37 @@ export function validateClanTag(clanTag: string): {
     };
   }
 
+  return { isValid: true };
+}
+
+// ---- Self-hosted nicknames --------------------------------------------------
+// The display name of a self-hosted account. The username is only a login
+// handle; this is what other players see. Any script is allowed (Chinese
+// included — it is drawn through the DOM name overlay) and there is no
+// profanity filter, matching the product rule for this fork. The only rule is
+// length: 1..10 code points, so a Chinese character or an emoji is one.
+
+/** Length in code points, after trimming. */
+export function nicknameLength(nickname: string): number {
+  return Array.from(nickname.trim()).length;
+}
+
+export function validateNickname(nickname: string): {
+  isValid: boolean;
+  error?: string;
+} {
+  const trimmed = nickname.trim();
+  if (trimmed.length === 0) {
+    return { isValid: false, error: translateText("nickname.empty") };
+  }
+  if (NICKNAME_CONTROL_CHAR_RE.test(trimmed)) {
+    return { isValid: false, error: translateText("nickname.invalid_chars") };
+  }
+  if (Array.from(trimmed).length > MAX_NICKNAME_LENGTH) {
+    return {
+      isValid: false,
+      error: translateText("nickname.too_long", { max: MAX_NICKNAME_LENGTH }),
+    };
+  }
   return { isValid: true };
 }

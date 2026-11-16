@@ -65,6 +65,18 @@ describe("nation-label-overlay", () => {
     expect((label as HTMLElement).style.display).toBe("");
   });
 
+  it("draws a nickname the atlas cannot render", () => {
+    // Self-hosted nicknames may be Chinese; the glyph atlas is Latin-only, so
+    // the name is blanked out of the GL pass and drawn here instead.
+    setNationNamesEnabled(false);
+    const overlay = makeOverlay([
+      player({ static: { displayName: "阿丹" }, nationFlag: undefined }),
+    ]);
+    repaint();
+
+    expect(overlay.querySelector("div")?.textContent).toBe("阿丹");
+  });
+
   it("leaves untranslated places to the renderer", () => {
     setNationNamesEnabled(true);
     const overlay = makeOverlay([

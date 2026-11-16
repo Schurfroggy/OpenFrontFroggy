@@ -102,12 +102,26 @@ describe("GameServer wire transcript", () => {
     vi.advanceTimersByTime(1000); // one lobby_info broadcast tick
 
     // The host edits the lobby, then arms the start timer.
+    const lobbyRecipients = [host, p2, p3, cast];
+    const countsBeforeEdit = lobbyRecipients.map(
+      (client) => mockWsOf(client).sent().length,
+    );
     await mockWsOf(host).emit({
       type: "intent",
       intent: {
         type: "update_game_config",
         config: { bots: 5, gameMode: GameMode.FFA },
       },
+    });
+    // Config edits immediately notify every participant, before the next timer
+    // broadcast. Pin this separately from the golden transcript.
+    lobbyRecipients.forEach((client, index) => {
+      const frames = mockWsOf(client).sent();
+      expect(frames).toHaveLength(countsBeforeEdit[index] + 1);
+      expect(frames[frames.length - 1]).toMatchObject({
+        type: "lobby_info",
+        lobby: { gameConfig: { bots: 5 }, serverTime: T0 + 1000 },
+      });
     });
     await mockWsOf(host).emit({
       type: "intent",

@@ -166,7 +166,13 @@ describe.each(VARIANTS)("full game snapshots: %s", (_, overrides) => {
       // Runs during the spawn phase and finishes inside init, so it is never
       // alive at a tick boundary. BasicExecutions.test.ts covers it directly.
       // Expeditions exist only in fog games; ExpeditionShip.test.ts covers their continuation.
-      const neverStored = new Set(["Pause", "ExpeditionShip"]);
+      // Admin outcome completes in init too; BasicExecutions tests its pending
+      // snapshot and post-restore result for both outcomes.
+      const neverStored = new Set([
+        "Pause",
+        "ExpeditionShip",
+        "AdminSetOutcome",
+      ]);
       const missing = EXECUTION_SNAPSHOT_TYPES.map((t) => t.name).filter(
         (name) => !reference.execTypes.has(name) && !neverStored.has(name),
       );

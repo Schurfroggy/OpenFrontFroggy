@@ -1,8 +1,18 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { UserMeResponseSchema } from "../../src/core/ApiSchemas";
+import { ClientJoinMessageSchema } from "../../src/core/Schemas";
+import { NicknameSchema } from "../../src/core/validations/Nickname";
 import { getUserMe, selfHostedUserMe } from "../../src/server/jwt";
 import { SelfHostedAccountStore } from "../../src/server/SelfHostedAccountStore";
 
@@ -41,6 +51,41 @@ describe("selfHostedUserMe", () => {
     expect(me.player.publicId).toBe(account.id);
     expect(me.player.username).toBe("Froggy");
     expect(me.player.friends).toEqual([]);
+  });
+
+  it("keeps saved punctuation nicknames valid in the profile and join message", () => {
+    const { account } = accounts.register("PunctUser", "correct horse battery");
+    for (const input of ["Bob!", "阿丹!", "A&B", "🎯".repeat(10)]) {
+      const renamed = accounts.setNickname(
+        account.id,
+        NicknameSchema.parse(input),
+      );
+      const me = selfHostedUserMe(renamed);
+      expect(UserMeResponseSchema.safeParse(me).success).toBe(true);
+      expect(
+        ClientJoinMessageSchema.safeParse({
+          type: "join",
+          token: account.id,
+          gameID: "game0001",
+          username: me.player.username,
+          clanTag: null,
+          turnstileToken: null,
+        }).success,
+      ).toBe(true);
+    }
+  });
+
+  it("displays the nickname, not the login username", () => {
+    const { account } = accounts.register("Dana", "correct horse battery");
+    const renamed = accounts.setNickname(account.id, "阿丹");
+
+    const me = selfHostedUserMe(renamed);
+
+    expect(me.player.username).toBe("阿丹");
+    // Both halves must match or the client treats the name as taken by
+    // someone else (accountNameHeld).
+    expect(me.player.usernameBase).toBe("阿丹");
+    expect(UserMeResponseSchema.safeParse(me).success).toBe(true);
   });
 });
 

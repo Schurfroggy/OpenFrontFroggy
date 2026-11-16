@@ -1,3 +1,4 @@
+import { AdminSetOutcomeExecution } from "../../../src/core/execution/AdminSetOutcomeExecution";
 import { AllianceExtensionExecution } from "../../../src/core/execution/alliance/AllianceExtensionExecution";
 import { AllianceRejectExecution } from "../../../src/core/execution/alliance/AllianceRejectExecution";
 import { AllianceRequestExecution } from "../../../src/core/execution/alliance/AllianceRequestExecution";
@@ -125,6 +126,21 @@ describe("basic execution snapshots", () => {
       game.executeNextTick();
       game.executeNextTick();
     });
+
+    test.each(["victory", "defeat"] as const)(
+      "pending admin %s survives restore",
+      async (outcome) => {
+        game.addExecution(new AdminSetOutcomeExecution(a, outcome));
+        const restored = await expectSnapshotRoundTrip(game, MAP, 2);
+        if (outcome === "victory") {
+          expect(game.getWinner()).toBe(a);
+          expect(restored.getWinner()).toBe(restored.player("alice"));
+        } else {
+          expect(game.player("alice").numTilesOwned()).toBe(0);
+          expect(restored.player("alice").numTilesOwned()).toBe(0);
+        }
+      },
+    );
 
     test("player executions across a cluster capture", async () => {
       // PlayerExecution is mid-cycle (lastCalc) for everyone.

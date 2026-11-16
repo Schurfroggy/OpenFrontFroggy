@@ -18,14 +18,18 @@ import { normalizeUsername } from "./SelfHostedAccountStore";
  */
 
 export interface FriendSummary {
+  /** Login handle: the key friends actions address. */
   username: string;
-  /** ISO-8601, resolved at read time so a rename shows up immediately. */
+  /** Display name. */
+  nickname: string;
+  /** ISO-8601, resolved at read time so a nickname change shows immediately. */
   since: string;
 }
 
 export interface FriendRequestSummary {
   id: string;
   username: string;
+  nickname: string;
   createdAt: string;
 }
 
@@ -33,6 +37,7 @@ export interface GameInvite {
   id: string;
   gameID: string;
   fromUsername: string;
+  fromNickname: string;
   createdAt: string;
   /** Unix seconds; the client shows "expires in N minutes". */
   expiresAt: number;
@@ -128,12 +133,12 @@ export class SelfHostedFriendsStore {
   listFriends(accountId: string): FriendSummary[] {
     return this.database
       .prepare(
-        `SELECT a.username AS username,
+        `SELECT a.username AS username, a.nickname AS nickname,
            strftime('${ISO_UTC}', f.created_at) AS since
          FROM self_hosted_friends f
          INNER JOIN self_hosted_accounts a ON a.id = f.friend_id
          WHERE f.account_id = ?
-         ORDER BY a.username COLLATE NOCASE ASC`,
+         ORDER BY a.nickname COLLATE NOCASE ASC, a.username COLLATE NOCASE ASC`,
       )
       .all(accountId) as unknown as FriendSummary[];
   }
@@ -142,22 +147,23 @@ export class SelfHostedFriendsStore {
   lookup(
     accountId: string,
     username: string,
-  ): { username: string; relation: FriendRelation } | null {
+  ): { username: string; nickname: string; relation: FriendRelation } | null {
     const target = this.accountByUsername(username);
     if (target === null) return null;
+    const identity = { username: target.username, nickname: target.nickname };
     if (target.id === accountId) {
-      return { username: target.username, relation: "self" };
+      return { ...identity, relation: "self" };
     }
     if (this.areFriends(accountId, target.id)) {
-      return { username: target.username, relation: "friend" };
+      return { ...identity, relation: "friend" };
     }
     if (this.pendingRequest(accountId, target.id) !== null) {
-      return { username: target.username, relation: "pending_out" };
+      return { ...identity, relation: "pending_out" };
     }
     if (this.pendingRequest(target.id, accountId) !== null) {
-      return { username: target.username, relation: "pending_in" };
+      return { ...identity, relation: "pending_in" };
     }
-    return { username: target.username, relation: "none" };
+    return { ...identity, relation: "none" };
   }
 
   listRequests(accountId: string): {
@@ -281,6 +287,7 @@ export class SelfHostedFriendsStore {
       invites: this.database
         .prepare(
           `SELECT i.id, i.game_id AS gameID, a.username AS fromUsername,
+             a.nickname AS fromNickname,
              strftime('${ISO_UTC}', i.created_at) AS createdAt,
              i.expires_at AS expiresAt
            FROM self_hosted_game_invites i
@@ -410,14 +417,14 @@ export class SelfHostedFriendsStore {
 
   private accountByUsername(
     username: string,
-  ): { id: string; username: string } | null {
+  ): { id: string; username: string; nickname: string } | null {
     const row = this.database
       .prepare(
-        `SELECT id, username FROM self_hosted_accounts
+        `SELECT id, username, nickname FROM self_hosted_accounts
          WHERE normalized_username = ?`,
       )
       .get(normalizeUsername(username)) as
-      | { id: string; username: string }
+      | { id: string; username: string; nickname: string }
       | undefined;
     return row ?? null;
   }
@@ -460,7 +467,7 @@ export class SelfHostedFriendsStore {
     const other = direction === "incoming" ? "from_id" : "to_id";
     return this.database
       .prepare(
-        `SELECT r.id, a.username AS username,
+        `SELECT r.id, a.username AS username, a.nickname AS nickname,
            strftime('${ISO_UTC}', r.created_at) AS createdAt
          FROM self_hosted_friend_requests r
          INNER JOIN self_hosted_accounts a ON a.id = r.${other}

@@ -1,3 +1,7 @@
+import { DatabaseSync } from "node:sqlite";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { SelfHostedAccountStore } from "../../src/server/SelfHostedAccountStore";
 
@@ -21,6 +25,8 @@ describe("SelfHostedAccountStore", () => {
 
     expect(registered.account).toMatchObject({
       username: "Froggy",
+      // New accounts start with the username as their display name.
+      nickname: "Froggy",
       role: "admin",
     });
     expect(accounts.accountForSession(registered.sessionToken)).toEqual(
@@ -64,16 +70,67 @@ describe("SelfHostedAccountStore", () => {
     );
   });
 
-  it("renames without changing the stable account id or role", () => {
+  it("changes the nickname but never the login username", () => {
     const accounts = store();
     const registered = accounts.register("Alice", "password-one");
-    const renamed = accounts.rename(registered.account.id, "Alice II");
+    const renamed = accounts.setNickname(registered.account.id, "爱丽丝");
+    const bob = accounts.register("Bob", "password-two");
 
     expect(renamed).toMatchObject({
       id: registered.account.id,
-      username: "Alice II",
+      username: "Alice",
+      nickname: "爱丽丝",
       role: "admin",
     });
+    // The login handle still works and resolves to the new display name.
+    expect(accounts.login("Alice", "password-one")?.account.nickname).toBe(
+      "爱丽丝",
+    );
+    // Nicknames are not unique.
+    expect(accounts.setNickname(bob.account.id, "爱丽丝").nickname).toBe(
+      "爱丽丝",
+    );
+  });
+
+  it("backfills the nickname for accounts created before the column existed", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "nickname-migration-"));
+    const file = path.join(directory, "accounts.sqlite");
+    try {
+      const legacy = new DatabaseSync(file);
+      legacy.exec(`
+        CREATE TABLE self_hosted_accounts (
+          id TEXT PRIMARY KEY,
+          username TEXT NOT NULL,
+          normalized_username TEXT NOT NULL UNIQUE,
+          password_hash TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'player' CHECK(role IN ('player', 'admin')),
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+      legacy
+        .prepare(
+          `INSERT INTO self_hosted_accounts
+            (id, username, normalized_username, password_hash, role)
+           VALUES (?, ?, ?, ?, ?)`,
+        )
+        .run(
+          "00000000-0000-4000-8000-000000000001",
+          "老玩家",
+          "老玩家",
+          "scrypt$x$y",
+          "player",
+        );
+      legacy.close();
+
+      const accounts = new SelfHostedAccountStore(file);
+      expect(
+        accounts.accountById("00000000-0000-4000-8000-000000000001"),
+      ).toMatchObject({ username: "老玩家", nickname: "老玩家" });
+      accounts.close();
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it("deletes a session on logout", () => {

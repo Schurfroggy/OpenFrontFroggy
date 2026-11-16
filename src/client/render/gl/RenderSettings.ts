@@ -387,6 +387,19 @@ export interface RenderSettings {
     outlineSoftness: number; // smoothstep range (0 = hard, higher = softer)
   };
   warArrows: {
+    tailLengthTiles: number;
+    tipLengthTiles: number;
+    directionOffsetDegrees: number; // clockwise in map coordinates
+    revealMs: number;
+    smoothingMs: number;
+    lingerMs: number;
+    fadeOutMs: number;
+    jumpDistanceTiles: number;
+    refreshTicks: number;
+    headSweepRatio: number; // notch advance from shoulders as a fraction of head length
+    tailNotchRatio: number; // V-cut depth / tail half-width; capped to half the shaft
+    tailOpacity: number; // tail opacity multiplier (0–1, capped at headOpacity)
+    headOpacity: number; // head opacity multiplier (0–1)
     widthStartTiles: number; // ribbon half-width at the tail, world tiles
     widthTipTiles: number; // ribbon half-width at the tip, world tiles
     outlineTiles: number; // white outline half-width, world tiles

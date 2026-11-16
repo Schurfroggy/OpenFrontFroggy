@@ -60,6 +60,7 @@ import type { FriendInviteButton } from "../../src/client/components/FriendInvit
 const ACCOUNT = {
   id: "11111111-1111-4111-8111-111111111111",
   username: "Alice",
+  nickname: "Alice",
   role: "player" as const,
   createdAt: "2026-10-20T00:00:00Z",
 };
@@ -68,7 +69,9 @@ function friendsOverview(overrides: Record<string, unknown> = {}) {
   return {
     ok: true,
     data: {
-      friends: [{ username: "Bob", since: "2026-10-19T00:00:00Z" }],
+      friends: [
+        { username: "Bob", nickname: "鲍勃", since: "2026-10-19T00:00:00Z" },
+      ],
       incoming: [],
       outgoing: [],
       ...overrides,
@@ -130,12 +133,12 @@ describe("friends-modal", () => {
   it("lists friends and turns a username lookup into a sent request", async () => {
     mocks.lookupFriend.mockResolvedValue({
       ok: true,
-      data: { username: "Carol", relation: "none" },
+      data: { username: "Carol", nickname: "Carol", relation: "none" },
     });
     const modal = await openFriendsModal();
 
     expect(modal.textContent).toContain("friends.tab_friends");
-    expect(modal.textContent).toContain("Bob");
+    expect(modal.textContent).toContain("鲍勃");
 
     const input = modal.querySelector("input") as HTMLInputElement;
     input.value = "Carol";
@@ -273,7 +276,7 @@ describe("friend-invite-button", () => {
     const button = await openPanel();
 
     expect(mocks.loadFriends).toHaveBeenCalled();
-    expect(button.textContent).toContain("Bob");
+    expect(button.textContent).toContain("鲍勃");
 
     buttonByText(button, "friends.invite")?.click();
     await new Promise((resolve) => setTimeout(resolve, 0));

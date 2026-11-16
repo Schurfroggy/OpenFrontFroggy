@@ -72,10 +72,14 @@ describe("free-form username charset", () => {
     }
   });
 
-  it("still refuses what the renderer cannot draw", () => {
+  it("still refuses what the renderer cannot draw in the free-form field", () => {
     // Emoji render as a separate icon beside the name, never inline, so an
     // emoji in the name itself has no glyph at all. Latin Extended-A and above
     // is not drawable either — see the atlas/8-bit tests below.
+    //
+    // The wire schema deliberately accepts these now: a self-hosted nickname
+    // may be Chinese (or any script) and is drawn by <nation-label-overlay>
+    // instead of the atlas. The free-form upstream field keeps the Latin rule.
     for (const name of [
       "🔥Ada",
       "日本語",
@@ -85,11 +89,10 @@ describe("free-form username charset", () => {
       "Łukasz",
     ]) {
       expect(validateUsername(name).isValid, name).toBe(false);
-      expect(UsernameSchema.safeParse(name).success, name).toBe(false);
     }
   });
 
-  it("refuses punctuation and symbols inside the atlas range", () => {
+  it("keeps punctuation out of upstream free-form names while allowing display nicknames", () => {
     // Widening to "everything under U+0180" would have admitted control
     // characters, the C1 block and HTML-significant punctuation. It is letters
     // and digits plus a named punctuation allowlist, not a codepoint bound.
@@ -106,7 +109,7 @@ describe("free-form username charset", () => {
     ]) {
       expect(validateUsername(name).isValid, JSON.stringify(name)).toBe(false);
       expect(UsernameSchema.safeParse(name).success, JSON.stringify(name)).toBe(
-        false,
+        !/[\p{Cc}]/u.test(name),
       );
     }
   });

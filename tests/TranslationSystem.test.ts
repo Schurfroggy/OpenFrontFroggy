@@ -193,9 +193,12 @@ function prefixToRegex(prefix: string): RegExp {
   return new RegExp(`^${escapeRegex(prefix)}.+$`);
 }
 
-function isTranslateTextCall(node: ts.CallExpression): boolean {
+function isTranslateTextCall(
+  node: ts.CallExpression,
+  aliases: ReadonlySet<string>,
+): boolean {
   if (ts.isIdentifier(node.expression)) {
-    return node.expression.text === "translateText";
+    return aliases.has(node.expression.text);
   }
   if (ts.isPropertyAccessExpression(node.expression)) {
     return node.expression.name.text === "translateText";
@@ -383,6 +386,18 @@ function scanTsFile(
     filePath.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
 
+  const aliases = new Set(["translateText"]);
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+    const bindings = statement.importClause?.namedBindings;
+    if (!bindings || !ts.isNamedImports(bindings)) continue;
+    for (const specifier of bindings.elements) {
+      if ((specifier.propertyName ?? specifier.name).text === "translateText") {
+        aliases.add(specifier.name.text);
+      }
+    }
+  }
+
   const result: ScanResult = {
     usedKeys: new Set<string>(),
     referencedStaticKeys: new Set<string>(),
@@ -409,7 +424,7 @@ function scanTsFile(
       result.usedKeys.add(node.text);
     }
 
-    if (ts.isCallExpression(node) && isTranslateTextCall(node)) {
+    if (ts.isCallExpression(node) && isTranslateTextCall(node, aliases)) {
       const firstArg = node.arguments[0];
       if (firstArg !== undefined) {
         collectFromExpression(firstArg, result, rootKeys, enKeySet, true);

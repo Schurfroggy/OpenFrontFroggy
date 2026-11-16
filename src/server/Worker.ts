@@ -600,10 +600,14 @@ export async function startWorker() {
         // join_verify doesn't cover: Dev and API failure (fail-open joins).
         // An approved join_verify overwrites it with the API's display-ready
         // pair below.
-        let { username, clanTag } = censorPlayer(
-          clientMsg.username,
-          clientMsg.clanTag ?? null,
-        );
+        //
+        // Self-hosted servers never run join_verify, and the product rule there
+        // is that a nickname has no profanity filter (it is the player's own
+        // display name, up to 10 characters of any script). The account rules
+        // live in the account API; this path only transports the name.
+        let { username, clanTag } = ServerEnv.selfHosted()
+          ? { username: clientMsg.username, clanTag: null }
+          : censorPlayer(clientMsg.username, clientMsg.clanTag ?? null);
 
         // Gate the join and screen the display name in one API call: status
         // is the Turnstile verdict, and the response carries the

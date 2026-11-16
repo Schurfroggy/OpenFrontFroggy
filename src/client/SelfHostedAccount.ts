@@ -2,7 +2,10 @@ import { z } from "zod";
 
 const AccountSchema = z.object({
   id: z.uuid(),
+  /** Login handle, immutable. */
   username: z.string(),
+  /** Display name shown to players; editable, not unique. */
+  nickname: z.string(),
   role: z.enum(["player", "admin"]),
   createdAt: z.string(),
 });
@@ -91,8 +94,8 @@ export const loginSelfHostedAccount = (username: string, password: string) =>
 export const registerSelfHostedAccount = (username: string, password: string) =>
   submitAccount("register", username, password);
 
-export async function renameSelfHostedAccount(
-  username: string,
+export async function updateSelfHostedNickname(
+  nickname: string,
 ): Promise<AccountResult> {
   try {
     const response = await fetch("/api/self-hosted/account/profile", {
@@ -101,7 +104,7 @@ export async function renameSelfHostedAccount(
         Accept: "application/json",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ username }),
+      body: JSON.stringify({ nickname }),
     });
     const body = (await response.json().catch(() => ({}))) as {
       account?: unknown;

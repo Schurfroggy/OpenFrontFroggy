@@ -14,7 +14,10 @@ export type SelfHostedAccountRole = "player" | "admin";
 
 export interface SelfHostedAccount {
   id: string;
+  /** Login handle. Immutable once the account exists. */
   username: string;
+  /** Display name shown to players. Editable, not unique. */
+  nickname: string;
   role: SelfHostedAccountRole;
   createdAt: string;
 }
@@ -109,6 +112,10 @@ export class SelfHostedAccountStore {
         id TEXT PRIMARY KEY,
         username TEXT NOT NULL,
         normalized_username TEXT NOT NULL UNIQUE,
+        -- Display name. The username is the login handle and never changes;
+        -- the nickname is what other players see. They start out identical so
+        -- every pre-nickname account keeps displaying what it did before.
+        nickname TEXT NOT NULL DEFAULT '',
         password_hash TEXT NOT NULL,
         role TEXT NOT NULL DEFAULT 'player' CHECK(role IN ('player', 'admin')),
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -147,6 +154,30 @@ export class SelfHostedAccountStore {
       CREATE INDEX IF NOT EXISTS self_hosted_password_resets_account
         ON self_hosted_password_resets(account_id, status);
     `);
+    this.migrateNickname();
+  }
+
+  /**
+   * Accounts created before nicknames existed get the username as their
+   * nickname, so nothing a player sees changes until they edit it.
+   *
+   * `CREATE TABLE IF NOT EXISTS` cannot add a column to an existing table, so
+   * an older database is upgraded in place. The empty-string default is what
+   * marks "never set"; the UPDATE below is idempotent and covers both the
+   * just-added column and any row that somehow stayed blank.
+   */
+  private migrateNickname(): void {
+    const columns = this.database
+      .prepare("PRAGMA table_info(self_hosted_accounts)")
+      .all() as unknown as { name: string }[];
+    if (!columns.some((column) => column.name === "nickname")) {
+      this.database.exec(
+        "ALTER TABLE self_hosted_accounts ADD COLUMN nickname TEXT NOT NULL DEFAULT ''",
+      );
+    }
+    this.database.exec(
+      "UPDATE self_hosted_accounts SET nickname = username WHERE nickname = ''",
+    );
   }
 
   register(
@@ -178,13 +209,21 @@ export class SelfHostedAccountStore {
         ? "admin"
         : "player";
     const id = randomUUID();
+    const trimmedUsername = username.trim();
     this.database
       .prepare(
         `INSERT INTO self_hosted_accounts
-          (id, username, normalized_username, password_hash, role)
-         VALUES (?, ?, ?, ?, ?)`,
+          (id, username, normalized_username, nickname, password_hash, role)
+         VALUES (?, ?, ?, ?, ?, ?)`,
       )
-      .run(id, username.trim(), normalized, passwordHash(password), role);
+      .run(
+        id,
+        trimmedUsername,
+        normalized,
+        trimmedUsername,
+        passwordHash(password),
+        role,
+      );
     this.claimLegacyAchievements(id, username.trim(), normalized);
     const account = this.byId(id)!;
     return { account, sessionToken: this.createSession(id) };
@@ -232,21 +271,21 @@ export class SelfHostedAccountStore {
     return this.byId(id);
   }
 
-  rename(accountId: string, username: string): SelfHostedAccount {
-    const normalized = normalizeUsername(username);
-    try {
-      this.database
-        .prepare(
-          `UPDATE self_hosted_accounts SET username = ?, normalized_username = ?,
-             updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-        )
-        .run(username.trim(), normalized, accountId);
-    } catch (error) {
-      if (String(error).includes("UNIQUE")) {
-        throw Object.assign(new Error("username_taken"), { cause: error });
-      }
-      throw error;
-    }
+  /**
+   * Change the display name. The login handle is deliberately not editable:
+   * friends and password recovery address an account by username, so letting
+   * it move would orphan those links. Nicknames are not unique.
+   *
+   * The caller validates the text (length, control characters); this only
+   * stores what it is given so the rule lives in one place.
+   */
+  setNickname(accountId: string, nickname: string): SelfHostedAccount {
+    this.database
+      .prepare(
+        `UPDATE self_hosted_accounts SET nickname = ?,
+           updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      )
+      .run(nickname.trim(), accountId);
     return this.byId(accountId)!;
   }
 
@@ -381,7 +420,7 @@ export class SelfHostedAccountStore {
     this.expirePasswordResets();
     const accounts = this.database
       .prepare(
-        `SELECT a.id, a.username, a.role, a.created_at AS createdAt,
+        `SELECT a.id, a.username, a.nickname, a.role, a.created_at AS createdAt,
            COUNT(s.token_hash) AS activeSessions
          FROM self_hosted_accounts a
          LEFT JOIN self_hosted_sessions s
@@ -563,7 +602,7 @@ export class SelfHostedAccountStore {
   private byId(id: string): SelfHostedAccount | null {
     const row = this.database
       .prepare(
-        `SELECT id, username, role, created_at AS createdAt
+        `SELECT id, username, nickname, role, created_at AS createdAt
          FROM self_hosted_accounts WHERE id = ?`,
       )
       .get(id) as SelfHostedAccount | undefined;
@@ -575,7 +614,7 @@ export class SelfHostedAccountStore {
   ): SelfHostedAccount | null {
     const row = this.database
       .prepare(
-        `SELECT id, username, role, created_at AS createdAt
+        `SELECT id, username, nickname, role, created_at AS createdAt
          FROM self_hosted_accounts WHERE normalized_username = ?`,
       )
       .get(normalizedUsername) as SelfHostedAccount | undefined;

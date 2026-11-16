@@ -2320,6 +2320,11 @@
     "zoom_out": "縮小",
     "zoom_out_desc": "縮小地圖"
   },
+  "nickname": {
+    "empty": "請輸入暱稱。",
+    "invalid_chars": "暱稱不能包含換行或控制字元。",
+    "too_long": "暱稱最多 {max} 個字元。"
+  },
   "username": {
     "account_invalid_chars": "使用者名稱只能包含字母、數字、底線、連字號、和單字間的單格空格。",
     "claim_at_risk": "\"{name}\" 已不再被保留，隨時可被其他玩家使用。重新訂閱以保留。",
@@ -2330,6 +2335,7 @@
     "clan_label": "公會標籤",
     "clan_none_joined": "您尚未加入公會。",
     "clan_your_clans": "您的公會",
+    "enter_nickname": "輸入您的暱稱",
     "enter_username": "輸入您的使用者名稱",
     "invalid_chars": "使用者名稱只能包含字母、數字、空格、底線、連字號、和逗號。",
     "lapse_notice": "您的訂閱已結束，您不再以 \"{name}\" 遊玩。其將會保留給您直到 {date}──請在此之前重新訂閱以保留，否則其他玩家將可以使用。",

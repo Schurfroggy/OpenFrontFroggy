@@ -31,6 +31,7 @@ import { GameMapLoader } from "./game/GameMapLoader";
 import { ErrorUpdate, GameUpdateViewData } from "./game/GameUpdates";
 import { createNationsForGame } from "./game/NationCreation";
 import { loadTerrainMap as loadGameMap } from "./game/TerrainMapLoader";
+import type { WarFront } from "./game/WarFront";
 import { PseudoRandom } from "./PseudoRandom";
 import { ClientID, GameStartInfo, Turn } from "./Schemas";
 import {
@@ -397,20 +398,35 @@ export class GameRunner {
   public attackClusteredPositions(
     playerID: number,
     attackID?: string,
-  ): { id: string; positions: { x: number; y: number }[] }[] {
+    includeWarFronts = false,
+  ): {
+    id: string;
+    positions: { x: number; y: number }[];
+    fronts?: WarFront[];
+  }[] {
     const player = this.game.playerBySmallID(playerID);
     if (!player.isPlayer())
       throw new Error(`player with id ${playerID} not found`);
     const all = [...player.outgoingAttacks(), ...player.incomingAttacks()];
     const attacks = attackID ? all.filter((a) => a.id() === attackID) : all;
 
-    return attacks.map((a) => ({
-      id: a.id(),
-      positions: a.clusteredPositions().map((tile) => ({
-        x: this.game.map().x(tile),
-        y: this.game.map().y(tile),
-      })),
-    }));
+    return attacks.map((a) => {
+      if (includeWarFronts) {
+        const fronts = a.warFronts();
+        return {
+          id: a.id(),
+          positions: fronts.map(({ x, y }) => ({ x, y })),
+          fronts,
+        };
+      }
+      return {
+        id: a.id(),
+        positions: a.clusteredPositions().map((tile) => ({
+          x: this.game.map().x(tile),
+          y: this.game.map().y(tile),
+        })),
+      };
+    });
   }
 
   public bestTransportShipSpawn(

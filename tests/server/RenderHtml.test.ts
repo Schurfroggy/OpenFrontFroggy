@@ -12,6 +12,13 @@ import {
 } from "../../src/server/RenderHtml";
 import { ServerEnv } from "../../src/server/ServerEnv";
 
+// Keep template tests independent of whether a production build exists locally.
+vi.mock("../../src/server/RuntimeAssetManifest", () => ({
+  getRuntimeAssetManifest: async () => ({
+    "images/Favicon.svg": "/_assets/images/Favicon.test.svg",
+  }),
+}));
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // The identity deploy.sh writes: the tests below boot as letter "a" with one
@@ -375,7 +382,7 @@ describe("RenderHtml environment-only render", () => {
       [
         "      window.BOOTSTRAP_CONFIG = {",
         '        gitCommit: "abc",',
-        "        assetManifest: {},",
+        '        assetManifest: {"images/Favicon.svg":"/_assets/images/Favicon.test.svg"},',
         '        cdnBase: "",',
         `        gameEnv: ${JSON.stringify(ServerEnv.gameEnvName())},`,
         "        selfHosted: false,",

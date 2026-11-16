@@ -114,8 +114,11 @@ export function selfHostedUserMe(account: SelfHostedAccount): UserMeResponse {
       // Accounts are the trust boundary on a self-hosted server: there is no
       // newer/linked-account signal to weigh, and guests stay untrusted.
       trustTier: "trusted",
-      username: account.username,
-      usernameBase: account.username,
+      // The display name, not the login handle: every client surface that
+      // shows "your account name" reads this object. `usernameBase` must match
+      // it too, or the client treats the name as "held by someone else".
+      username: account.nickname,
+      usernameBase: account.nickname,
       usernameStatus: "claimed",
       flares: [],
       achievements: { singleplayerMap: [], player: [] },

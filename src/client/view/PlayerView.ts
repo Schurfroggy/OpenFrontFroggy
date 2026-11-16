@@ -27,16 +27,18 @@ import {
   PlayerUpdate,
 } from "../../core/game/GameUpdates";
 import { UserSettings } from "../../core/game/UserSettings";
-import { PlayerState, PlayerStatic, PlayerTypeEnum } from "../render/types";
-import { themeProvider } from "../theme/ThemeProvider";
-import { type CosmeticOwner, visibleCosmetics } from "./CosmeticVisibility";
-import { playerStateFromUpdate, playerStaticFromUpdate } from "./EntityState";
-import { GameView } from "./GameView";
+import type { WarFront } from "../../core/game/WarFront";
+import { isAtlasRenderable } from "../NameGlyphs";
 import {
   isMapLabelOverlayActive,
   localizeNationName,
   translatedPlaceName,
 } from "../NationNames";
+import { PlayerState, PlayerStatic, PlayerTypeEnum } from "../render/types";
+import { themeProvider } from "../theme/ThemeProvider";
+import { type CosmeticOwner, visibleCosmetics } from "./CosmeticVisibility";
+import { playerStateFromUpdate, playerStaticFromUpdate } from "./EntityState";
+import { GameView } from "./GameView";
 import { resolvePlayerColors } from "./PlayerColors";
 import { UnitView } from "./UnitView";
 
@@ -373,8 +375,13 @@ export class PlayerView {
 
   async attackClusteredPositions(
     attackID?: string,
-  ): Promise<{ id: string; positions: Cell[] }[]> {
-    return this.game.worker.attackClusteredPositions(this.smallID(), attackID);
+    includeWarFronts = false,
+  ): Promise<{ id: string; positions: Cell[]; fronts?: WarFront[] }[]> {
+    return this.game.worker.attackClusteredPositions(
+      this.smallID(),
+      attackID,
+      includeWarFronts,
+    );
   }
 
   units(...types: UnitType[]): UnitView[] {
@@ -424,20 +431,23 @@ export class PlayerView {
   /**
    * The name the map's own glyph-atlas pass should draw.
    *
-   * That atlas is Latin-only, so a place with a Chinese translation is drawn by
-   * <nation-label-overlay> instead and blanked here — drawing both would stack
-   * two names on the same spot, and drawing the Chinese through the atlas
-   * produces garbage.
+   * That atlas is Latin-only, so a place with a Chinese translation — or a
+   * player whose nickname is not Latin-1 — is drawn by <nation-label-overlay>
+   * instead and blanked here. Drawing both would stack two names on the same
+   * spot, and drawing the non-Latin one through the atlas produces garbage.
    */
   mapLabelName(): string {
     if (this.anonymousName !== null && userSettings.anonymousNames()) {
       return this.anonymousName;
     }
-    if (this.type() === PlayerType.Human) return this.static.displayName;
     // Blank only when the DOM overlay is actually running (it is not, for
     // example, in the replay shell): otherwise the GL name would vanish.
     if (!isMapLabelOverlayActive()) return this.static.displayName;
-    return translatedPlaceName(this.static.displayName, this.nationFlag) !== null
+    // A nickname the atlas cannot draw (Chinese, emoji) is rendered as DOM.
+    if (!isAtlasRenderable(this.static.displayName)) return "";
+    if (this.type() === PlayerType.Human) return this.static.displayName;
+    return translatedPlaceName(this.static.displayName, this.nationFlag) !==
+      null
       ? ""
       : this.static.displayName;
   }

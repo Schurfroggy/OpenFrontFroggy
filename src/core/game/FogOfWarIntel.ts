@@ -3,7 +3,7 @@ import {
   FOG_UNIT_RADIUS,
   territoryVisionRadius,
 } from "./FogOfWar";
-import { Game, Player, Structures, Unit, UnitType } from "./Game";
+import { Game, Player, PlayerType, Structures, Unit, UnitType } from "./Game";
 import { TileRef } from "./GameMap";
 import { fogHasGlobalVision } from "./GamePhases";
 
@@ -50,12 +50,18 @@ interface Circle {
   tile: TileRef;
   radius: number;
 }
+interface TerritoryContacts {
+  tileVersion: number;
+  radius: number;
+  countries: ReadonlySet<number>;
+}
 interface TickIndex {
   tick: number;
   borders: Grid<Border>;
   ownBorders: Map<number, Grid<TileRef>>;
   observers: Map<number, FogIntel>;
   sources: Unit[];
+  territoryContacts: Map<number, TerritoryContacts>;
 }
 const cache = new WeakMap<Game, TickIndex>();
 function indexFor(game: Game): TickIndex {
@@ -67,6 +73,7 @@ function indexFor(game: Game): TickIndex {
     ownBorders: new Map(),
     observers: new Map(),
     sources: [],
+    territoryContacts: new Map(),
   };
   for (const p of game.players()) {
     const own = new Grid<TileRef>(game);
@@ -152,6 +159,27 @@ export class FogIntel {
     }
     return found;
   }
+  private territoryContacts(
+    player: Player,
+    radius: number,
+  ): ReadonlySet<number> {
+    const id = player.smallID();
+    const tileVersion = player.tileChangeVersion();
+    const cached = this.index.territoryContacts.get(id);
+    if (cached?.tileVersion === tileVersion && cached.radius === radius)
+      return cached.countries;
+
+    // Different observers may share this country's land sight, but not its
+    // allies, vessels or other sources. Cache only the territorial contribution.
+    // Candidate borders are frozen in TickIndex; source borders are read live,
+    // as before. Their ownership version catches even same-size land exchanges
+    // within a tick. Radius is observer-captured and can also differ mid-tick.
+    const countries = new Set<number>();
+    for (const tile of player.borderTiles())
+      this.contacts(tile, radius, countries);
+    this.index.territoryContacts.set(id, { tileVersion, radius, countries });
+    return countries;
+  }
   visible(tile: TileRef): boolean {
     const cached = this.tileVisibility.get(tile);
     if (cached !== undefined) return cached;
@@ -205,8 +233,15 @@ export class FogIntel {
       for (const p of this.game.players()) {
         const radius = this.friends.get(p.smallID());
         if (radius === undefined) continue;
-        for (const tile of p.borderTiles())
-          this.contacts(tile, radius, this.countries);
+        if (this.friends.size === 1) {
+          // No shared sight: retain the direct path, avoiding an extra set and
+          // distance checks for countries already revealed by this one's units.
+          for (const tile of p.borderTiles())
+            this.contacts(tile, radius, this.countries);
+        } else {
+          for (const id of this.territoryContacts(p, radius))
+            this.countries.add(id);
+        }
       }
     }
     return this.countries.has(player.smallID());
@@ -233,15 +268,152 @@ export function canSeeUnit(game: Game, observer: Player, unit: Unit): boolean {
     !game.config().fogOfWar() || fogIntel(game, observer).unitVisible(unit)
   );
 }
+
+// Only strategic country knowledge lingers. Tile/unit visibility above still
+// uses the current tick for human inputs and automatic combat targeting.
+export const FOG_AI_CONTACT_REFRESH_TICKS = 5;
+interface AIContacts {
+  refreshedTick: number;
+  lastQueryTick: number;
+  nextRefreshTick: number;
+  countries: Set<number>;
+}
+const aiContacts = new WeakMap<Game, Map<number, AIContacts>>();
+
+function refreshAIContacts(game: Game, observer: Player): AIContacts {
+  const intel = fogIntel(game, observer);
+  const interval = FOG_AI_CONTACT_REFRESH_TICKS;
+  const offset =
+    (((observer.smallID() - game.ticks()) % interval) + interval) % interval;
+  return {
+    refreshedTick: game.ticks(),
+    lastQueryTick: game.ticks(),
+    // Always schedule the next strictly future slot. No wall-clock timers or
+    // PRNG draws: every client must refresh the same observers on the same tick.
+    nextRefreshTick: game.ticks() + (offset || interval),
+    countries: new Set(
+      game
+        .players()
+        .filter((p) => intel.knows(p))
+        .map((p) => p.smallID()),
+    ),
+  };
+}
+
+function strategicCountries(game: Game, observer: Player): Set<number> {
+  let entries = aiContacts.get(game);
+  if (!entries) aiContacts.set(game, (entries = new Map()));
+  let entry = entries.get(observer.smallID());
+  if (!entry || game.ticks() > entry.nextRefreshTick) {
+    // First use (or resuming after inactivity) gets immediate intelligence.
+    // Repeated use is served by the staggered scheduler, not by query timing.
+    entry = refreshAIContacts(game, observer);
+    entries.set(observer.smallID(), entry);
+  }
+  entry.lastQueryTick = game.ticks();
+  return entry.countries;
+}
+
+/** Called once at the start of a simulation tick, before AI executions. */
+export function refreshFogAIContacts(game: Game): void {
+  if (
+    !game.config().fogOfWar() ||
+    fogHasGlobalVision(game.elapsedGameSeconds())
+  )
+    return;
+  const entries = aiContacts.get(game);
+  if (!entries) return;
+  for (const [id, entry] of entries) {
+    const observer = game.playerBySmallID(id);
+    if (!observer.isPlayer() || !observer.isAlive()) {
+      entries.delete(id);
+      continue;
+    }
+    // Do not turn an occasional strategic query into permanent background
+    // scanning. Only refresh lists used again since their last computation.
+    if (
+      game.ticks() >= entry.nextRefreshTick &&
+      entry.lastQueryTick > entry.refreshedTick &&
+      game.ticks() - entry.lastQueryTick < FOG_AI_CONTACT_REFRESH_TICKS
+    ) {
+      const refreshed = refreshAIContacts(game, observer);
+      refreshed.lastQueryTick = entry.lastQueryTick;
+      entries.set(id, refreshed);
+    }
+  }
+}
+
+// These are remembered observations, not a disposable derived cache. Persist
+// them so loading between refresh slots does not grant fresh intelligence early.
+interface AIContactsSnapshot {
+  observer: number;
+  refreshedTick: number;
+  lastQueryTick: number;
+  nextRefreshTick: number;
+  countries: number[];
+}
+export function snapshotFogAIContacts(game: Game): AIContactsSnapshot[] {
+  return [...(aiContacts.get(game) ?? [])].map(([observer, entry]) => ({
+    observer,
+    refreshedTick: entry.refreshedTick,
+    lastQueryTick: entry.lastQueryTick,
+    nextRefreshTick: entry.nextRefreshTick,
+    countries: [...entry.countries],
+  }));
+}
+export function restoreFogAIContacts(
+  game: Game,
+  entries: AIContactsSnapshot[],
+): void {
+  cache.delete(game);
+  aiContacts.set(
+    game,
+    new Map(
+      entries.map(
+        ({
+          observer,
+          refreshedTick,
+          lastQueryTick,
+          nextRefreshTick,
+          countries,
+        }) => [
+          observer,
+          {
+            refreshedTick,
+            lastQueryTick,
+            nextRefreshTick,
+            countries: new Set(countries),
+          },
+        ],
+      ),
+    ),
+  );
+}
+
 export function knowsPlayer(
   game: Game,
   observer: Player,
   target: Player,
 ): boolean {
-  return !game.config().fogOfWar() || fogIntel(game, observer).knows(target);
+  if (
+    !game.config().fogOfWar() ||
+    fogHasGlobalVision(game.elapsedGameSeconds())
+  )
+    return true;
+  return observer.type() === PlayerType.Human
+    ? fogIntel(game, observer).knows(target)
+    : strategicCountries(game, observer).has(target.smallID());
 }
 export function knownPlayers(game: Game, observer: Player): Player[] {
-  return game.config().fogOfWar()
-    ? game.players().filter((p) => fogIntel(game, observer).knows(p))
-    : game.players();
+  if (
+    !game.config().fogOfWar() ||
+    fogHasGlobalVision(game.elapsedGameSeconds())
+  )
+    return game.players();
+  if (observer.type() === PlayerType.Human) {
+    const intel = fogIntel(game, observer);
+    return game.players().filter((p) => intel.knows(p));
+  }
+  const countries = strategicCountries(game, observer);
+  return game.players().filter((p) => countries.has(p.smallID()));
 }

@@ -322,13 +322,26 @@
     "outlineSoftness": 0.15
   },
   "warArrows": {
-    "widthStartTiles": 2.2,
-    "widthTipTiles": 1.4,
-    "outlineTiles": 0.55,
-    "headWidthTiles": 5.5,
-    "headLenTiles": 7.0,
+    "widthStartTiles": 2.4,
+    "widthTipTiles": 0.9,
+    "outlineTiles": 0.28,
+    "headWidthTiles": 3.4,
+    "headLenTiles": 7,
     "alpha": 1.0,
-    "blinkPeriodMs": 900
+    "blinkPeriodMs": 900,
+    "tailLengthTiles": 12,
+    "tipLengthTiles": 16,
+    "directionOffsetDegrees": 0,
+    "revealMs": 480,
+    "smoothingMs": 240,
+    "lingerMs": 800,
+    "fadeOutMs": 900,
+    "jumpDistanceTiles": 40,
+    "refreshTicks": 4,
+    "headSweepRatio": 0.4,
+    "tailNotchRatio": 1.25,
+    "tailOpacity": 0.18,
+    "headOpacity": 1.0
   },
   "bonusPopup": {
     "scale": 6,

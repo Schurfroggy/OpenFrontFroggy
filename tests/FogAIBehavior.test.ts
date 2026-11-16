@@ -12,7 +12,11 @@ import { NationWarshipBehavior } from "../src/core/execution/nation/NationWarshi
 import { NationExecution } from "../src/core/execution/NationExecution";
 import { AiAttackBehavior } from "../src/core/execution/utils/AiAttackBehavior";
 import { WarshipExecution } from "../src/core/execution/WarshipExecution";
-import { canSeeTile, knowsPlayer } from "../src/core/game/FogOfWarIntel";
+import {
+  canSeeTile,
+  FOG_AI_CONTACT_REFRESH_TICKS,
+  knowsPlayer,
+} from "../src/core/game/FogOfWarIntel";
 import {
   Cell,
   Difficulty,
@@ -66,7 +70,8 @@ describe("fog-only AI decisions", () => {
     a.buildUnit(UnitType.Warship, game.ref(150, 100), {
       patrolTile: game.ref(150, 100),
     });
-    game.executeNextTick();
+    for (let i = 0; i <= FOG_AI_CONTACT_REFRESH_TICKS; i++)
+      game.executeNextTick();
     expect(knowsPlayer(game, a, c)).toBe(true);
     expect(nuke.findBestNukeTarget()).toBe(c);
   });

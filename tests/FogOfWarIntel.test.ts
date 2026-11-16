@@ -60,10 +60,10 @@ describe("sparse fog intelligence", () => {
       patrolTile: game.ref(170, 100),
     });
     game.executeNextTick();
-    expect(knowsPlayer(game, a, c)).toBe(true);
+    expect(fogIntel(game, a).knows(c)).toBe(true);
     ship.move(game.ref(10, 100));
     game.executeNextTick();
-    expect(knowsPlayer(game, a, c)).toBe(false);
+    expect(fogIntel(game, a).knows(c)).toBe(false);
   });
   it("matches nuclear contact and surveying reciprocity, then withdraws them", async () => {
     const { game, a, b, c } = await intelScene();
@@ -86,8 +86,8 @@ describe("sparse fog intelligence", () => {
       phase: "exploring",
     });
     for (let i = 0; i < 301; i++) game.executeNextTick();
-    expect(knowsPlayer(game, b, a)).toBe(false);
-    expect(knowsPlayer(game, b, c)).toBe(false);
+    expect(fogIntel(game, b).knows(a)).toBe(false);
+    expect(fogIntel(game, b).knows(c)).toBe(false);
   });
   it("does not apply any visibility restriction in ordinary games", async () => {
     const { game, a, c } = await intelScene(false);

@@ -1,6 +1,8 @@
 import { html, LitElement, nothing } from "lit";
 import { customElement } from "lit/decorators.js";
 import { Cell } from "../../../core/game/Game";
+import { UserSettings } from "../../../core/game/UserSettings";
+import { isAtlasRenderable } from "../../NameGlyphs";
 import {
   NATION_NAMES_EVENT,
   setMapLabelOverlayActive,
@@ -12,6 +14,9 @@ import type { GameView } from "../../view/GameView";
 /** nameData.size is in world cells; the camera scale converts to pixels. Tune
  * here if the DOM label looks larger or smaller than the renderer's own text. */
 const FONT_SCALE = 1;
+
+// Read live so toggling anonymous names stops drawing real nicknames here.
+const userSettings = new UserSettings();
 
 const LABEL_STYLE = [
   "position:fixed",
@@ -118,11 +123,18 @@ export class NationLabelOverlay extends LitElement {
 
     for (const player of game.players()) {
       if (!player.isAlive()) continue;
-      const translated = translatedPlaceName(
-        player.static.displayName,
-        player.nationFlag,
-      );
-      if (translated === null) continue;
+      const name = player.static.displayName;
+      // Two labels live here: the Chinese place names (when the option is on)
+      // and any name the glyph atlas cannot draw — a player's Chinese
+      // nickname, for instance. Everything else keeps the renderer's text.
+      // Anonymous names are drawn by the renderer and must not be replaced by
+      // the real (possibly non-Latin) name here.
+      const label =
+        translatedPlaceName(name, player.nationFlag) ??
+        (isAtlasRenderable(name) || userSettings.anonymousNames()
+          ? null
+          : name);
+      if (label === null) continue;
       const data = player.nameData;
       if (data === undefined || data.size <= 0) continue;
       if (!game.isTileVisible(game.ref(Math.floor(data.x), Math.floor(data.y))))
@@ -146,7 +158,7 @@ export class NationLabelOverlay extends LitElement {
 
       seen.add(player.id());
       const el = this.ensureNode(player.id());
-      if (el.textContent !== translated) el.textContent = translated;
+      if (el.textContent !== label) el.textContent = label;
       el.style.fontSize = `${fontSize}px`;
       // -50% centering plus a half-line lift: the renderer's name sits above
       // the troop count line, which stays on the GL path.

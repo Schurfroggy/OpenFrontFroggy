@@ -294,6 +294,7 @@ ctx.addEventListener("message", async (e: MessageEvent<MainThreadMessage>) => {
         const attacks = (await gameRunner).attackClusteredPositions(
           message.playerID,
           message.attackID,
+          message.includeWarFronts,
         );
         sendMessage({
           type: "attack_clustered_positions_result",

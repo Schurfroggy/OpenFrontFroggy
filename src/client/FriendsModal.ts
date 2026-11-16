@@ -303,7 +303,10 @@ export class FriendsModal extends BaseModal {
                 (friend) => html`
                   <li class="flex items-center justify-between gap-3 py-3">
                     <div class="min-w-0">
-                      <div class="truncate font-bold">${friend.username}</div>
+                      <div class="truncate font-bold">${friend.nickname}</div>
+                      <div class="truncate font-mono text-[11px] text-white/35">
+                        ${friend.username}
+                      </div>
                       <div class="text-xs text-white/50">
                         ${translateText("friends.friends_since", {
                           date: formatDate(friend.since),
@@ -341,7 +344,7 @@ export class FriendsModal extends BaseModal {
               ${outgoing.map(
                 (request) => html`
                   <li class="flex items-center justify-between py-2 text-sm">
-                    <span class="truncate">${request.username}</span>
+                    <span class="truncate">${request.nickname}</span>
                     <span class="text-xs text-white/50"
                       >${translateText("friends.pending")}</span
                     >
@@ -368,7 +371,12 @@ export class FriendsModal extends BaseModal {
       case "none":
         return html`
           <div class="mt-3 flex items-center justify-between gap-3 rounded-xl bg-black/20 p-3">
-            <span class="truncate font-bold">${lookup.username}</span>
+            <span class="min-w-0">
+              <span class="block truncate font-bold">${lookup.nickname}</span>
+              <span class="block truncate font-mono text-[11px] text-white/35">
+                ${lookup.username}
+              </span>
+            </span>
             ${button(
               translateText("friends.send_request"),
               () => void this.addFriend(lookup.username),
@@ -378,17 +386,22 @@ export class FriendsModal extends BaseModal {
       case "pending_in":
         return html`
           <div class="mt-3 flex items-center justify-between gap-3 rounded-xl bg-black/20 p-3">
-            <span class="truncate font-bold">${lookup.username}</span>
+            <span class="min-w-0">
+              <span class="block truncate font-bold">${lookup.nickname}</span>
+              <span class="block truncate font-mono text-[11px] text-white/35">
+                ${lookup.username}
+              </span>
+            </span>
             ${button(translateText("friends.accept"), () => void this.acceptByUsername(lookup.username))}
           </div>
         `;
       case "pending_out":
         return html`<div class="mt-3 rounded-xl bg-black/20 p-3 text-sm text-white/60">
-          ${lookup.username} · ${translateText("friends.relation_pending_out")}
+          ${lookup.nickname} · ${translateText("friends.relation_pending_out")}
         </div>`;
       case "friend":
         return html`<div class="mt-3 rounded-xl bg-black/20 p-3 text-sm text-white/60">
-          ${lookup.username} · ${translateText("friends.relation_friend")}
+          ${lookup.nickname} · ${translateText("friends.relation_friend")}
         </div>`;
       case "self":
         return html`<div class="mt-3 rounded-xl bg-black/20 p-3 text-sm text-white/60">
@@ -502,7 +515,7 @@ export class FriendsModal extends BaseModal {
       ${incoming.map(
         (request: FriendRequest) => html`
           <li class="flex items-center justify-between gap-3 py-3">
-            <span class="min-w-0 truncate font-bold">${request.username}</span>
+            <span class="min-w-0 truncate font-bold">${request.nickname}</span>
             <div class="flex shrink-0 gap-2">
               <button
                 class="rounded-lg bg-malibu-blue px-3 py-1.5 text-xs font-bold text-zinc-900 disabled:opacity-50"

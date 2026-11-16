@@ -12,12 +12,14 @@ import { z } from "zod";
 
 const FriendSchema = z.object({
   username: z.string(),
+  nickname: z.string(),
   since: z.string(),
 });
 
 const FriendRequestSchema = z.object({
   id: z.uuid(),
   username: z.string(),
+  nickname: z.string(),
   createdAt: z.string(),
 });
 
@@ -25,6 +27,7 @@ const GameInviteSchema = z.object({
   id: z.uuid(),
   gameID: z.string(),
   fromUsername: z.string(),
+  fromNickname: z.string(),
   createdAt: z.string(),
   expiresAt: z.number(),
 });
@@ -42,6 +45,7 @@ const InboxSchema = z.object({
 
 const LookupSchema = z.object({
   username: z.string(),
+  nickname: z.string(),
   relation: z.enum(["self", "friend", "pending_out", "pending_in", "none"]),
 });
 

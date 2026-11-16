@@ -9,12 +9,13 @@ import {
   loginSelfHostedAccount,
   logoutSelfHostedAccount,
   registerSelfHostedAccount,
-  renameSelfHostedAccount,
+  updateSelfHostedNickname,
   requestSelfHostedPasswordReset,
   type PasswordResetCredential,
   type SelfHostedAccount,
   type SelfHostedPasswordReset,
 } from "./SelfHostedAccount";
+import { validateNickname } from "../core/validations/username";
 import { translateText } from "./Utils";
 
 const PASSWORD_RESET_STORAGE_KEY = "selfHostedPasswordReset";
@@ -26,6 +27,7 @@ export class SelfHostedAccountModal extends BaseModal {
   @state() private mode: "login" | "register" = "login";
   @state() private guestView: "credentials" | "forgot" = "credentials";
   @state() private username = "";
+  @state() private nickname = "";
   @state() private password = "";
   @state() private confirmPassword = "";
   @state() private currentPassword = "";
@@ -43,6 +45,7 @@ export class SelfHostedAccountModal extends BaseModal {
     void loadSelfHostedAccount(true).then((account) => {
       this.account = account;
       this.username = account?.username ?? "";
+      this.nickname = account?.nickname ?? "";
       this.loading = false;
       if (!account) this.restorePasswordReset();
     });
@@ -293,7 +296,11 @@ export class SelfHostedAccountModal extends BaseModal {
               <div class="text-sm text-white/45">
                 ${translateText("self_hosted_account.signed_in_as")}
               </div>
-              <div class="mt-1 text-2xl font-black">${account.username}</div>
+              <div class="mt-1 text-2xl font-black">${account.nickname}</div>
+              <div class="mt-1 font-mono text-xs text-white/45">
+                ${translateText("self_hosted_account.login_username")}:
+                ${account.username}
+              </div>
             </div>
             <span
               class="rounded-full border border-malibu-blue/30 bg-malibu-blue/10 px-3 py-1 text-xs font-bold text-malibu-blue"
@@ -322,18 +329,20 @@ export class SelfHostedAccountModal extends BaseModal {
               </dd>
             </div>
           </dl>
-          <form class="space-y-4" @submit=${this.submitRename}>
+          <form class="space-y-4" @submit=${this.submitNickname}>
             ${this.field(
-              "new_username",
+              "nickname",
               "text",
-              this.username,
-              (value) => (this.username = value),
+              this.nickname,
+              (value) => (this.nickname = value),
+              undefined,
+              10,
             )}
             <button
               class="rounded-xl bg-malibu-blue px-5 py-3 font-bold disabled:opacity-50"
               ?disabled=${this.submitting}
             >
-              ${translateText("self_hosted_account.save_name")}
+              ${translateText("self_hosted_account.save_nickname")}
             </button>
           </form>
         </div>
@@ -387,6 +396,7 @@ export class SelfHostedAccountModal extends BaseModal {
     value: string,
     update: (value: string) => void,
     autocomplete?: string,
+    maxLength?: number,
   ) {
     return html`<label class="block">
       <span class="mb-1.5 block text-sm font-bold text-white/65"
@@ -396,15 +406,17 @@ export class SelfHostedAccountModal extends BaseModal {
         class="w-full rounded-xl border border-white/15 bg-black/25 px-4 py-3 text-white outline-none focus:border-malibu-blue"
         type=${type}
         .value=${value}
-        minlength=${type === "password" ? 8 : 3}
-        maxlength=${type === "password" ? 128 : 20}
+        minlength=${type === "password" ? 8 : maxLength === undefined ? 3 : 1}
+        maxlength=${type === "password" ? 128 : (maxLength ?? 20)}
         required
         autocomplete=${autocomplete ??
-        (key === "username" || key === "new_username"
+        (key === "username"
           ? "username"
-          : this.mode === "register"
-            ? "new-password"
-            : "current-password")}
+          : key === "nickname"
+            ? "nickname"
+            : this.mode === "register"
+              ? "new-password"
+              : "current-password")}
         @input=${(event: Event) =>
           update((event.target as HTMLInputElement).value)}
       />
@@ -429,10 +441,15 @@ export class SelfHostedAccountModal extends BaseModal {
     this.applyAccountAndReload(result.account);
   };
 
-  private submitRename = async (event: Event) => {
+  private submitNickname = async (event: Event) => {
     event.preventDefault();
+    const validation = validateNickname(this.nickname);
+    if (!validation.isValid) {
+      this.error = validation.error ?? "";
+      return;
+    }
     this.submitting = true;
-    const result = await renameSelfHostedAccount(this.username);
+    const result = await updateSelfHostedNickname(this.nickname);
     this.submitting = false;
     if (!result.ok) {
       this.error = translateText(`self_hosted_account.error_${result.error}`);
@@ -569,7 +586,7 @@ export class SelfHostedAccountModal extends BaseModal {
   };
 
   private applyAccountAndReload(account: SelfHostedAccount) {
-    localStorage.setItem("username", account.username);
+    localStorage.setItem("username", account.nickname);
     localStorage.setItem("usernameIsGenerated", "false");
     sessionStorage.removeItem("selfHostedAccountPlayToken");
     window.location.reload();

@@ -122,11 +122,12 @@
     "title": "我的账户",
     "guest_notice": "你目前以游客身份游玩。游客可以加入游戏，但不会获得永久成就。",
     "login": "登录",
+    "login_username": "登录用户名",
     "register": "注册",
     "username": "用户名",
+    "nickname": "昵称",
     "password": "密码",
     "confirm_password": "确认密码",
-    "new_username": "新用户名",
     "password_mismatch": "两次输入的密码不一致。",
     "forgot_password": "忘记密码？",
     "back_to_login": "返回登录",
@@ -148,6 +149,7 @@
     "reset_completed": "已完成",
     "reset_completed_help": "这个账户的密码已经修改完成。",
     "start_new_request": "重新提交申请",
+    "save_nickname": "保存昵称",
     "set_new_password": "设置新密码",
     "current_password": "当前密码",
     "new_password": "新密码",
@@ -157,7 +159,6 @@
     "role_admin": "管理员",
     "account_id": "账户 ID",
     "created_at": "注册日期",
-    "save_name": "保存新名字",
     "logout": "退出登录",
     "error_username_taken": "这个用户名已经注册。",
     "error_invalid_credentials": "用户名或密码错误。",
@@ -819,7 +820,13 @@
     "replaced": "您已于另一个分页或窗口加入了匹配。",
     "title_2v2": "2v2 排位赛（ALPHA 版）"
   },
+  "nickname": {
+    "empty": "请输入昵称。",
+    "invalid_chars": "昵称不能包含换行或控制字符。",
+    "too_long": "昵称最多 {max} 个字符。"
+  },
   "username": {
+    "enter_nickname": "输入昵称",
     "enter_username": "输入用户名",
     "not_string": "用户名必须是字符串。",
     "too_short": "用户名最少包含 {min} 个字符。",

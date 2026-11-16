@@ -337,6 +337,7 @@ export class AttackExecution implements Execution {
       if (targetPlayer) {
         targetPlayer.removeTroops(defenderTroopLoss);
       }
+      this.attack.recordConquest(tileToConquer);
       this._owner.conquer(tileToConquer);
       this.handleDeadDefender();
     }

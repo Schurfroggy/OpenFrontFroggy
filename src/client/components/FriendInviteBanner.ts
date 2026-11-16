@@ -74,7 +74,7 @@ export class FriendInviteBanner extends LitElement {
           <div class="min-w-0 flex-1">
             <div class="text-sm font-bold">
               ${translateText("friends.banner_text", {
-                name: invite.fromUsername,
+                name: invite.fromNickname,
               })}
             </div>
             ${extra > 0

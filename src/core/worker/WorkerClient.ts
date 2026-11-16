@@ -10,6 +10,7 @@ import {
 } from "../game/Game";
 import { TileRef } from "../game/GameMap";
 import { ErrorUpdate, GameUpdateViewData } from "../game/GameUpdates";
+import type { WarFront } from "../game/WarFront";
 import { ClientID, GameStartInfo, Turn } from "../Schemas";
 import { generateID } from "../Util";
 import { WorkerMessage } from "./WorkerMessages";
@@ -299,7 +300,8 @@ export class WorkerClient {
   attackClusteredPositions(
     playerID: number,
     attackID?: string,
-  ): Promise<{ id: string; positions: Cell[] }[]> {
+    includeWarFronts = false,
+  ): Promise<{ id: string; positions: Cell[]; fronts?: WarFront[] }[]> {
     return new Promise((resolve, reject) => {
       if (!this.isInitialized) {
         reject(new Error("Worker not initialized"));
@@ -327,6 +329,7 @@ export class WorkerClient {
           message.attacks.map((a) => ({
             id: a.id,
             positions: a.positions.map((c) => new Cell(c.x, c.y)),
+            fronts: a.fronts,
           })),
         );
       });
@@ -336,6 +339,7 @@ export class WorkerClient {
         id: messageId,
         playerID,
         attackID,
+        includeWarFronts,
       });
     });
   }

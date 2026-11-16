@@ -2,12 +2,24 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WarFrontsController } from "../../../src/client/controllers/WarFrontsController";
 import { MapViewModeEvent } from "../../../src/client/InputHandler";
 import type { WarArrow } from "../../../src/client/render/gl/passes/WarArrowPass";
+import defaults from "../../../src/client/render/gl/render-settings.json";
 import { EventBus } from "../../../src/core/EventBus";
+import { MessageType } from "../../../src/core/game/Game";
 import {
   GameUpdateType,
   type UnitIncomingUpdate,
 } from "../../../src/core/game/GameUpdates";
-import { MessageType } from "../../../src/core/game/Game";
+import type { WarFront } from "../../../src/core/game/WarFront";
+
+function frontAt(pos: { x: number; y: number }): WarFront {
+  return {
+    ...pos,
+    directionX: 1,
+    directionY: 0,
+    size: 50,
+    directionSource: "border",
+  };
+}
 
 function makeState(
   smallID: number,
@@ -38,6 +50,7 @@ function makeGame(opts: {
   mySmallID?: number;
   playerStates: Map<number, ReturnType<typeof makeState>>;
   clustered?: Map<string, { x: number; y: number }[]>;
+  fronts?: Map<string, WarFront[]>;
   updates?: UnitIncomingUpdate[];
   ticks?: number;
   unitOwners?: Map<number, number>;
@@ -52,7 +65,11 @@ function makeGame(opts: {
       territoryColor: () => ({ toRgb: () => ({ r: 255, g: 0, b: 0 }) }),
       attackClusteredPositions: async () =>
         Array.from((opts.clustered ?? new Map()).entries()).map(
-          ([id, positions]) => ({ id, positions }),
+          ([id, positions]) => ({
+            id,
+            positions,
+            fronts: opts.fronts?.get(id) ?? positions.map(frontAt),
+          }),
         ),
     }),
   );
@@ -71,11 +88,6 @@ function makeGame(opts: {
       if (!p) throw new Error(`player ${sid} not found`);
       return p;
     },
-    // Structures for the macro-fallback direction (attacker centroid at
-    // x=-20, defender at x=+20) — only consulted when a front anchor sits
-    // deep inside one side's land.
-    unitsOwnedBy: (sid: number) =>
-      sid === 1 ? [{ tile: () => -20 }] : sid === 2 ? [{ tile: () => 20 }] : [],
     x: (ref: number) => ref,
     y: () => 0,
     // Tile-ownership grid for direction sampling: default map splits at
@@ -85,7 +97,8 @@ function makeGame(opts: {
     isValidCoord: () => true,
     ref: (x: number, y: number) => ({ x, y }),
     isLand: () => true,
-    ownerID: (ref: { x: number }) => (ref.x > 0 ? 2 : 1),
+    isImpassable: () => false,
+    ownerID: (ref: { x: number }): number => (ref.x > 0 ? 2 : 1),
     ticks: () => opts.ticks ?? 0,
     updatesSinceLastTick: () =>
       opts.updates && opts.updates.length > 0
@@ -165,9 +178,7 @@ describe("WarFrontsController", () => {
     // Wait for the async clustered-positions RPC to settle and rebuild.
     await vi.waitFor(() => {
       ctrl.tick();
-      expect(
-        view.arrows.some((batch) => batch.length > 0),
-      ).toBe(true);
+      expect(view.arrows.some((batch) => batch.length > 0)).toBe(true);
     });
 
     const last = view.arrows.filter((b) => b.length > 0).slice(-1)[0]!;
@@ -182,11 +193,9 @@ describe("WarFrontsController", () => {
     expect(arrow.r).toBeCloseTo(1);
     expect(arrow.g).toBe(0);
     expect(arrow.retreating).toBe(false);
-    // Both control points sit off the straight tail→tip axis and on the
-    // same side of it: the arrow bows like a history-book arrow.
-    expect(arrow.p1y).not.toBeCloseTo(0);
-    expect(arrow.p2y).not.toBeCloseTo(0);
-    expect(Math.sign(arrow.p1y)).toBe(Math.sign(arrow.p2y));
+    // The new lance is aligned with the measured direction, without hash bends.
+    expect(arrow.p1y).toBeCloseTo(0);
+    expect(arrow.p2y).toBeCloseTo(0);
   });
 
   it("clears arrows when the view switches away from war", async () => {
@@ -211,67 +220,8 @@ describe("WarFrontsController", () => {
     expect(view.arrows.slice(-1)[0]).toHaveLength(0);
   });
 
-  it("lingers and fades when a war's attacks vanish (AI re-investment gap)", async () => {
-    // Live clustered map we can empty to simulate the attack dying.
-    let clustered = new Map<string, { x: number; y: number }[]>([
-      ["atk1", [{ x: 0, y: 0 }]],
-    ]);
+  it("shortens the arrow tip when the defender's land strip is thin", async () => {
     const game = makeGame({
-      playerStates: new Map([
-        [1, makeState(1, [{ targetID: 2, id: "atk1", troops: 10 }])],
-        [2, makeState(2, [])],
-      ]),
-      clustered,
-    });
-    // Re-wire the RPC to the live map so emptying it removes the front.
-    // Capture the original lookup first — we're about to replace it.
-    const origLookup = (game as unknown as {
-      playerBySmallID: (sid: number) => Record<string, unknown>;
-    }).playerBySmallID;
-    (game as {
-      playerBySmallID: (sid: number) => Record<string, unknown>;
-    }).playerBySmallID = (sid: number) => ({
-      ...origLookup(sid),
-      attackClusteredPositions: async () =>
-        Array.from(clustered.entries()).map(([id, positions]) => ({
-          id,
-          positions,
-        })),
-    });
-    const { ctrl, view } = setup(game);
-    eventBus.emit(new MapViewModeEvent("war"));
-
-    ctrl.tick();
-    await vi.waitFor(() => {
-      ctrl.tick();
-      expect(
-        view.arrows.some((b) => b.some((a) => a.fade === 1)),
-      ).toBe(true);
-    });
-
-    // All of player 1's attacks vanish (troops ran out).
-    clustered = new Map([["atk1", []]]);
-    // War list is refreshed every 20 ticks; run enough ticks for the
-    // refresh to notice, then let the linger/fade steps run.
-    for (let i = 0; i < 25; i++) ctrl.tick();
-    await vi.waitFor(() => {
-      for (let i = 0; i < 30; i++) ctrl.tick();
-      const batches = view.arrows.filter((b) => b.length > 0);
-      // Arrow still shown (lingering) but at reduced opacity.
-      const last = batches.slice(-1)[0]!;
-      expect(last[0]!.fade).toBeLessThan(1);
-      expect(last[0]!.fade).toBeGreaterThan(0);
-    });
-
-    // After enough more updates the arrow is fully gone.
-    for (let i = 0; i < 80; i++) ctrl.tick();
-    await vi.waitFor(() => {
-      for (let i = 0; i < 12; i++) ctrl.tick();
-      expect(view.arrows.slice(-1)[0]!.length).toBe(0);
-    });
-  });
-
-  it("shortens the arrow tip when the defender's land strip is thin", async () => {    const game = makeGame({
       playerStates: new Map([
         [1, makeState(1, [{ targetID: 2, id: "atk1", troops: 10 }])],
         [2, makeState(2, [])],
@@ -287,14 +237,10 @@ describe("WarFrontsController", () => {
     ctrl.tick();
     await vi.waitFor(() => {
       ctrl.tick();
-      expect(
-        view.arrows.some((batch) => batch.length > 0),
-      ).toBe(true);
+      expect(view.arrows.some((batch) => batch.length > 0)).toBe(true);
     });
 
-    const arrow = view.arrows
-      .filter((b) => b.length > 0)
-      .slice(-1)[0]![0]!;
+    const arrow = view.arrows.filter((b) => b.length > 0).slice(-1)[0]![0]!;
     // Tip clamps to the last defender tile (x=8) instead of reaching 16.
     expect(arrow.p3x).toBeLessThanOrEqual(8);
     expect(arrow.p3x).toBeGreaterThanOrEqual(6);
@@ -303,7 +249,12 @@ describe("WarFrontsController", () => {
   it("flags retreating attacks so the pass can blink them", async () => {
     const game = makeGame({
       playerStates: new Map([
-        [1, makeState(1, [{ targetID: 2, id: "atk1", troops: 10, retreating: true }])],
+        [
+          1,
+          makeState(1, [
+            { targetID: 2, id: "atk1", troops: 10, retreating: true },
+          ]),
+        ],
         [2, makeState(2, [])],
       ]),
       clustered: new Map([["atk1", [{ x: 0, y: 0 }]]]),
@@ -320,7 +271,7 @@ describe("WarFrontsController", () => {
     expect(view.arrows.slice(-1)[0]![0]!.retreating).toBe(true);
   });
 
-  it("glides arrows toward new targets instead of snapping", async () => {
+  it("publishes new targets for the render-loop animator", async () => {
     // Clustered front at x=0 initially.
     let clustered = new Map([["atk1", [{ x: 0, y: 0 }]]]);
     const game = makeGame({
@@ -347,6 +298,7 @@ describe("WarFrontsController", () => {
           Array.from(clustered.entries()).map(([id, positions]) => ({
             id,
             positions,
+            fronts: positions.map(frontAt),
           })),
       };
     };
@@ -356,14 +308,10 @@ describe("WarFrontsController", () => {
     ctrl.tick();
     await vi.waitFor(() => {
       ctrl.tick();
-      expect(
-        view.arrows.some((batch) => batch.length > 0),
-      ).toBe(true);
+      expect(view.arrows.some((batch) => batch.length > 0)).toBe(true);
     });
 
-    const first = view.arrows
-      .filter((b) => b.length > 0)
-      .slice(-1)[0]![0]!;
+    const first = view.arrows.filter((b) => b.length > 0).slice(-1)[0]![0]!;
     expect(first.p3x).toBeCloseTo(16, 0); // tip at +16 from front x=0
 
     // The front jumps 10 tiles right (+X). The target tip is now 26, but
@@ -382,38 +330,24 @@ describe("WarFrontsController", () => {
     const eased = view.arrows.slice(-1)[0]![0]!;
     // Eased: strictly between the old tip (16) and the new target (26).
     expect(eased.p3x).toBeGreaterThan(16);
-    expect(eased.p3x).toBeLessThan(26);
+    expect(eased.p3x).toBeCloseTo(26);
   });
 
-  it("keeps an arrow when the front anchor is surrounded by defender land", async () => {
-    // The attack bulge sits deep inside the defender's territory: rings
-    // around (10,0) sample only owner-2 tiles, so the local centroid
-    // difference cancels. The macro fallback (structure centroids at
-    // x=-20 → x=+20) must keep the arrow alive, pointing +X.
+  it("does not invent a direction when the worker reports no contact", async () => {
     const game = makeGame({
       playerStates: new Map([
         [1, makeState(1, [{ targetID: 2, id: "atk1", troops: 10 }])],
         [2, makeState(2, [])],
       ]),
       clustered: new Map([["atk1", [{ x: 10, y: 0 }]]]),
+      fronts: new Map([["atk1", []]]),
     });
+    const spy = vi.spyOn(game.players()[0], "attackClusteredPositions");
     const { ctrl, view } = setup(game);
     eventBus.emit(new MapViewModeEvent("war"));
-
     ctrl.tick();
-    await vi.waitFor(() => {
-      ctrl.tick();
-      expect(
-        view.arrows.some((batch) => batch.length > 0),
-      ).toBe(true);
-    });
-
-    const arrow = view.arrows
-      .filter((b) => b.length > 0)
-      .slice(-1)[0]![0]!;
-    // Tail behind the anchor (-X), tip ahead of it (+X): +X direction.
-    expect(arrow.p0x).toBeLessThan(10);
-    expect(arrow.p3x).toBeGreaterThan(10);
+    await vi.waitFor(() => expect(spy).toHaveResolved());
+    expect(view.arrows.every((batch) => batch.length === 0)).toBe(true);
   });
 
   it("scales arrow size with the smaller nation's territory", async () => {
@@ -434,14 +368,10 @@ describe("WarFrontsController", () => {
     ctrl.tick();
     await vi.waitFor(() => {
       ctrl.tick();
-      expect(
-        view.arrows.some((batch) => batch.length > 0),
-      ).toBe(true);
+      expect(view.arrows.some((batch) => batch.length > 0)).toBe(true);
     });
 
-    const arrow = view.arrows
-      .filter((b) => b.length > 0)
-      .slice(-1)[0]![0]!;
+    const arrow = view.arrows.filter((b) => b.length > 0).slice(-1)[0]![0]!;
     expect(arrow.scale).toBeCloseTo(2);
     expect(arrow.p3x).toBeCloseTo(32, 0);
   });
@@ -456,7 +386,7 @@ describe("WarFrontsController", () => {
       ]),
       clustered: new Map([
         ["mine", [{ x: 0, y: 0 }]],
-        ["theirs", [{ x: 15, y: 0 }]],
+        ["theirs", [{ x: 20, y: 0 }]],
       ]),
     });
     // Four-kingdom land column: 1 (x≤0) | 2 (0<x≤10) | 3 (10<x≤20) |
@@ -474,6 +404,194 @@ describe("WarFrontsController", () => {
 
     const arrows = view.arrows.slice(-1)[0]!;
     expect(arrows).toHaveLength(2);
+  });
+
+  it.each([1, 2, 4])(
+    "keeps scaled tips inside a three-tile coastal strip (scale %s)",
+    async (scale) => {
+      const states = new Map([
+        [1, makeState(1, [{ targetID: 2, id: "a", troops: 10 }])],
+        [2, makeState(2, [])],
+      ]);
+      for (const state of states.values())
+        state.tilesOwned = 1200 * scale * scale;
+      const game = makeGame({
+        playerStates: states,
+        clustered: new Map([["a", [{ x: 0, y: 0 }]]]),
+      });
+      game.isLand = (ref?: { x: number }) => (ref?.x ?? 0) <= 3;
+      const { ctrl, view } = setup(game);
+      eventBus.emit(new MapViewModeEvent("war"));
+      ctrl.tick();
+      await vi.waitFor(() => expect(view.arrows.slice(-1)[0]?.length).toBe(1));
+      expect(view.arrows.slice(-1)[0]![0].p3x).toBeLessThan(3.5);
+    },
+  );
+
+  it("constrains the tail to the outer edge of the first tile", async () => {
+    const game = makeGame({
+      playerStates: new Map([
+        [1, makeState(1, [{ targetID: 2, id: "a", troops: 10 }])],
+        [2, makeState(2, [])],
+      ]),
+      clustered: new Map([["a", [{ x: 0, y: 0 }]]]),
+    });
+    game.isValidCoord = (x?: number) => (x ?? 0) >= 0;
+    const { ctrl, view } = setup(game);
+    eventBus.emit(new MapViewModeEvent("war"));
+    ctrl.tick();
+    await vi.waitFor(() => expect(view.arrows.slice(-1)[0]?.length).toBe(1));
+    // Rendering adds 0.5 to tile-center coordinates.
+    expect(view.arrows.slice(-1)[0]![0].p0x).toBeGreaterThanOrEqual(-0.5);
+  });
+
+  it("applies the configurable direction offset before fitting", async () => {
+    const game = makeGame({
+      playerStates: new Map([
+        [1, makeState(1, [{ targetID: 2, id: "a", troops: 10 }])],
+        [2, makeState(2, [])],
+      ]),
+      clustered: new Map([["a", [{ x: 0, y: 0 }]]]),
+    });
+    const view = {
+      ...makeView(),
+      getSettings: () => ({
+        ...defaults,
+        warArrows: { ...defaults.warArrows, directionOffsetDegrees: 30 },
+      }),
+    };
+    const { ctrl } = setup(game, view);
+    eventBus.emit(new MapViewModeEvent("war"));
+    ctrl.tick();
+    await vi.waitFor(() => expect(view.arrows.slice(-1)[0]?.length).toBe(1));
+    const a = view.arrows.slice(-1)[0][0];
+    expect(Math.atan2(a.p3y - a.p0y, a.p3x - a.p0x)).toBeCloseTo(Math.PI / 6);
+  });
+
+  it("uses the worker's diagonal direction even when surrounding land suggests +X", async () => {
+    const game = makeGame({
+      playerStates: new Map([
+        [1, makeState(1, [{ targetID: 2, id: "a", troops: 10 }])],
+        [2, makeState(2, [])],
+      ]),
+      clustered: new Map([["a", [{ x: 0, y: 0 }]]]),
+      fronts: new Map([
+        [
+          "a",
+          [
+            {
+              ...frontAt({ x: 0, y: 0 }),
+              directionX: Math.SQRT1_2,
+              directionY: -Math.SQRT1_2,
+              directionSource: "conquest",
+            },
+          ],
+        ],
+      ]),
+    });
+    const { ctrl, view } = setup(game);
+    eventBus.emit(new MapViewModeEvent("war"));
+    ctrl.tick();
+    await vi.waitFor(() => expect(view.arrows.slice(-1)[0]?.length).toBe(1));
+    const arrow = view.arrows.slice(-1)[0]![0];
+    expect(arrow.p3x).toBeGreaterThan(arrow.p0x);
+    expect(arrow.p3y).toBeLessThan(arrow.p0y);
+  });
+
+  it("keeps multiple fronts stable across attack reinvestment and reversed result ordering", async () => {
+    const state = makeState(1, [{ targetID: 2, id: "old", troops: 10 }]);
+    const clustered = new Map([
+      [
+        "old",
+        [
+          { x: 0, y: 0 },
+          { x: 0, y: 60 },
+        ],
+      ],
+    ]);
+    const game = makeGame({
+      playerStates: new Map([
+        [1, state],
+        [2, makeState(2, [])],
+      ]),
+      clustered,
+    });
+    const { ctrl, view } = setup(game);
+    eventBus.emit(new MapViewModeEvent("war"));
+    ctrl.tick();
+    await vi.waitFor(() => expect(view.arrows.slice(-1)[0]?.length).toBe(2));
+    const ids = new Map(view.arrows.slice(-1)[0]!.map((a) => [a.p0y, a.id]));
+    state.outgoingAttacks[0].id = "new";
+    clustered.clear();
+    clustered.set("new", [
+      { x: 0, y: 60 },
+      { x: 0, y: 0 },
+    ]);
+    for (let i = 0; i < 4; i++) ctrl.tick();
+    await vi.waitFor(() => {
+      expect(view.arrows.slice(-1)[0]?.length).toBe(2);
+      for (const arrow of view.arrows.slice(-1)[0]!)
+        expect(arrow.id).toBe(ids.get(arrow.p0y));
+    });
+  });
+
+  it("fits the whole arrow between third-party territories", async () => {
+    const game = makeGame({
+      playerStates: new Map([
+        [1, makeState(1, [{ targetID: 2, id: "a", troops: 10 }])],
+        [2, makeState(2, [])],
+      ]),
+      clustered: new Map([["a", [{ x: 0, y: 0 }]]]),
+    });
+    game.ownerID = (ref: { x: number; y?: number }) =>
+      Math.abs(ref.y ?? 0) > 1 ? 3 : ref.x > 0 ? 2 : 1;
+    const { ctrl, view } = setup(game);
+    eventBus.emit(new MapViewModeEvent("war"));
+    ctrl.tick();
+    await vi.waitFor(() => expect(view.arrows.slice(-1)[0]?.length).toBe(1));
+    const arrow = view.arrows.slice(-1)[0]![0];
+    expect(arrow.scale * defaults.warArrows.headWidthTiles).toBeLessThan(1.5);
+    expect(arrow.isPointValid?.(5, 2)).toBe(false);
+  });
+
+  it("does not request war evidence in fog-of-war games", () => {
+    const game = makeGame({
+      playerStates: new Map([
+        [1, makeState(1, [{ targetID: 2, id: "a", troops: 10 }])],
+      ]),
+    });
+    const spy = vi.spyOn(game.players()[0], "attackClusteredPositions");
+    const view = makeView();
+    const ctrl = new WarFrontsController(
+      game as never,
+      eventBus,
+      view as never,
+      true,
+    );
+    ctrl.init();
+    eventBus.emit(new MapViewModeEvent("war"));
+    ctrl.tick();
+    expect(spy).not.toHaveBeenCalled();
+    expect(view.arrows.every((a) => a.length === 0)).toBe(true);
+  });
+
+  it("round-robins past ten attacking players", async () => {
+    const states = new Map(
+      Array.from({ length: 12 }, (_, i) => [
+        i + 1,
+        makeState(i + 1, [{ targetID: 99, id: `a${i}`, troops: 10 }]),
+      ]),
+    );
+    const game = makeGame({ playerStates: states });
+    const calls = game
+      .players()
+      .map((p) => vi.spyOn(p, "attackClusteredPositions"));
+    const { ctrl } = setup(game);
+    eventBus.emit(new MapViewModeEvent("war"));
+    ctrl.tick();
+    await vi.waitFor(() => expect(calls[0]).toHaveBeenCalled());
+    for (let i = 0; i < 5; i++) ctrl.tick();
+    await vi.waitFor(() => expect(calls[11]).toHaveBeenCalled());
   });
 
   it("highlights the nuke attacker for 300 ticks when a nuke targets me", () => {

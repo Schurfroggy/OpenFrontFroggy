@@ -159,6 +159,8 @@ export class SelfHostedAdminModal extends BaseModal {
               <thead class="bg-white/8 text-xs uppercase text-white/45">
                 <tr>
                   <th class="px-5 py-3">
+                    ${translateText("self_hosted_account.nickname")}
+                    /
                     ${translateText("self_hosted_account.username")}
                   </th>
                   <th class="px-5 py-3">
@@ -179,7 +181,12 @@ export class SelfHostedAdminModal extends BaseModal {
                 ${overview.accounts.map(
                   (account) =>
                     html`<tr>
-                      <td class="px-5 py-4 font-bold">${account.username}</td>
+                      <td class="px-5 py-4">
+                        <div class="font-bold">${account.nickname}</div>
+                        <div class="font-mono text-xs text-white/40">
+                          ${account.username}
+                        </div>
+                      </td>
                       <td class="px-5 py-4">
                         ${translateText(
                           `self_hosted_account.role_${account.role}`,

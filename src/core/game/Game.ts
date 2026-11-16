@@ -16,6 +16,7 @@ import { RailNetwork } from "./RailNetwork";
 import { Stats } from "./Stats";
 import { ReadonlyTileSet } from "./TileSet";
 import { UnitPredicate } from "./UnitGrid";
+import type { WarFront } from "./WarFront";
 
 function isEnumValue<T extends Record<string, string | number>>(
   enumObj: T,
@@ -419,6 +420,8 @@ export interface Attack {
   clearBorder(): void;
   borderSize(): number;
   clusteredPositions(): TileRef[];
+  warFronts(): WarFront[];
+  recordConquest(tile: TileRef): void;
 }
 
 export interface AllianceRequest {

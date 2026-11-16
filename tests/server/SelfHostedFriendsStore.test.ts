@@ -174,7 +174,7 @@ describe("SelfHostedFriendsStore", () => {
     expect(friends.inbox(bob.id).invites).toHaveLength(0);
   });
 
-  it("follows a rename because rows key on the account, not the name", () => {
+  it("keys friend rows on the account, not the display name", () => {
     const { accounts, friends } = makeStore();
     const alice = register(accounts, "Alice");
     const bob = register(accounts, "Bob");
@@ -183,13 +183,15 @@ describe("SelfHostedFriendsStore", () => {
       friends.acceptRequest(request.id, bob.id);
     }
 
-    accounts.rename(bob.id, "Bobby");
+    // A nickname change is display-only: the login handle is what the friends
+    // API addresses, so both the row and the lookup keep working.
+    accounts.setNickname(bob.id, "鲍勃");
 
     expect(friends.listFriends(alice.id).map((f) => f.username)).toEqual([
-      "Bobby",
+      "Bob",
     ]);
-    expect(friends.lookup(alice.id, "Bobby")?.relation).toBe("friend");
-    expect(friends.lookup(alice.id, "Bob")).toBeNull();
+    expect(friends.lookup(alice.id, "Bob")?.relation).toBe("friend");
+    expect(friends.lookup(alice.id, "Bob")?.nickname).toBe("鲍勃");
   });
 
   it("never puts an account id on the wire", () => {
